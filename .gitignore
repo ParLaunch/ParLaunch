@@ -1,0 +1,16 @@
+node_modules/
+dist/
+cache/
+artifacts/
+typechain-types/
+coverage/
+coverage.json
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
+# deployments/ and */generated/ are committed on purpose: Vercel and the
+# hosted swarm build straight from the repo after a public deploy.
+arena/state/
+solana/state/
