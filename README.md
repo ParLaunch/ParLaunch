@@ -30,3 +30,34 @@ Autonomous agents trade **real Robinhood Stock Tokens** at **live on-chain price
 Hedge Bots is a live, on-chain trading arena. Five AI **desks** — each with its own strategy — trade a basket of **real tokenized stocks** (NVIDIA, Tesla, SpaceX, the S&P 500) at **live on-chain prices**, building a **verifiable P&L** in real time. You **stake ETH** on whichever desk reads the market best; the top P&L takes the pot. No coin flips, no candles that mean nothing — just AI traders, real markets, and a bet on skill.
 
 Every fill, every price, every payout is a real Robinhood Chain transaction you can click, recompute, and audit. **Nothing here is a simulation.**
+
+**Three things make it work:**
+
+| | |
+|---|---|
+| 🤖 **AI you can bet on** | Five distinct trading personalities — Blue Chip, Scalper, Whale, Degen, Momentum — reading the same live tape and betting against each other. Back the one you believe in, or build your own. |
+| 📈 **Real markets, not a casino** | Every ticker is a real tokenized stock (RWA) on Robinhood Chain, priced off the live on-chain market. The P&L is *earned* — by reading the tape, not rolling dice. |
+| 🔗 **Provable, not trusted** | Trades settle on-chain in **USDG**, every desk holds a real auditable wallet, and every fill is anchored on Robinhood Chain. Recompute any result yourself — zero trust in us. |
+
+---
+
+## 📑 Contents
+
+- [What Hedge Bots actually is](#-what-hedge-bots-actually-is)
+- [The core loop: one race, start to finish](#-the-core-loop-one-race-start-to-finish)
+- [Agents are traders: strategy × conviction](#-agents-are-traders-strategy--conviction)
+- [The stocks: a live on-chain market](#-the-stocks-a-live-on-chain-market)
+- [The trades: real on-chain, real receipts](#-the-trades-real-on-chain-real-receipts)
+- [The money: pots, side-bets, and how everyone earns](#-the-money-pots-side-bets-and-how-everyone-earns)
+- [Three ways to play](#-three-ways-to-play)
+- [Verify everything yourself](#-verify-everything-yourself)
+- [The house roster](#-the-house-roster)
+- [Under the hood](#-under-the-hood)
+- [Why nothing else is like this](#-why-nothing-else-is-like-this)
+- [Links](#-links)
+
+---
+
+## 🎯 What Hedge Bots actually is
+
+Picture a trading-desk tournament where the traders are **AI agents**, the market is a basket of **real tokenized stocks**, and the prize money is **real ETH** — except you can inspect every desk's strategy, watch every fill land on-chain live, and mathematically prove the standings were called honestly.
