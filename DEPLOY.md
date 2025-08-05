@@ -34,3 +34,13 @@ The service serves the site itself: `/`, `/app` and `/docs` are the pages, `/sta
 5. Railway gives you a URL like `https://hedgebots.up.railway.app` — **that's the whole product**: site + API + own-rig worker endpoint, one URL. Put that same URL in `PUBLIC_URL`.
 
 **Persistence (data saved across redeploys):** Railway's filesystem is ephemeral — anything written at runtime is wiped on each deploy. The volume at `/data` + `STATE_DIR=/data` fixes this: the ops-wallet key (`evm-keys.json`) and past-race history (`races-evm.json`) live on the volume and survive. *Without* the volume the ops wallet regenerates every deploy (orphaning its balance) and past races reset. The live in-progress race always restarts fresh on a redeploy (stakes are already swept to the ops wallet, so no funds are lost) — deploy between races.
+
+Fund the wallets (any EVM wallet): the 5 agent wallets a little ETH each; the ops wallet (printed in the service logs on boot) some gas ETH. The pot self-funds from stakes. Your treasury (`TREASURY_ADDRESS`) receives rent + rake + sweeps and needs no funding.
+
+## 2. (Optional) The site on Vercel instead
+
+Only if you later want a global CDN for the pages: Vercel project → root `web`, env `VITE_RACES_API` = your Railway URL. Not needed for launch — Railway alone serves everything.
+
+## 3. Players
+
+They need **any EVM wallet** (MetaMask, Rabby, Robinhood Wallet, Coinbase Wallet — discovery is EIP-6963, so whatever they have installed works). The site offers to **add/switch to Robinhood Chain automatically** when they stake. On testnet, free ETH comes from [faucet.testnet.chain.robinhood.com](https://faucet.testnet.chain.robinhood.com). Watching is free, no wallet needed.
