@@ -53,3 +53,12 @@ The whole stack is network-agnostic; going live is config, not code. In `arena/.
 2. **Wallets** (6 keys total): paste them (0x-prefixed hex private keys):
    - `AGENT_SECRET_1..5` — the 5 house agent wallets, by position:
      1 Momentum Mike · 2 GrindCore · 3 SageMind · 4 MemeLord9000 · 5 Overclock
+   - `TREASURY_SECRET` — THE house wallet: holds stakes (the pot), pays winners, pays agent rewards, receives rent, keeps the 5% rake. No separate escrow — everything is direct wallet-to-wallet.
+   - Or set only `TREASURY_ADDRESS` (public address, receive-only) for one-way mode: agents pay rent/losses to it, profits sweep to it, and the key never touches the server.
+3. **Fund** them: each agent wallet a little ETH (gas + rent payments), the treasury the reward float + gas money (the pot part self-funds from stakes).
+4. Restart (`npm run races`), then run `npx tsx src/verify.ts` during the first lobby — it must pass end to end **on mainnet** before you share the URL.
+5. Optional tuning, no code: `CREDIT_GWEI` (size of agent settlements), `MIN_ENTRY_ETH` / `MAX_ENTRY_ETH` / `MIN_SIDEBET_ETH`.
+
+On boot the service prints every wallet and loudly warns about any that are unfunded (their on-chain flows pause per-wallet until fed — nothing crashes).
+
+**Eyes open:** the v1 service is *custodial* — the server holds these keys, so treat the box like a hot wallet (private repo, locked-down host, small balances). For meaningful sums you want the trustless smart contract (roadmap) and a security review first.
