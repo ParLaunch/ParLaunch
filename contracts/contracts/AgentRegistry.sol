@@ -94,3 +94,98 @@ contract AgentRegistry is Ownable, ReentrancyGuard {
         uint64 indexed season,
         uint256 seasonEarnings,
         uint256 stakeBurned,
+        uint256 stakeReturned
+    );
+
+    modifier onlyMarket() {
+        require(authorizedMarkets[msg.sender], "registry: not market");
+        _;
+    }
+
+    constructor(IERC20 _cycle, uint64 _epochDuration, uint256 _minAgentStake) Ownable(msg.sender) {
+        require(_epochDuration > 0, "registry: bad epoch");
+        cycle = _cycle;
+        epochGenesis = uint64(block.timestamp);
+        epochDuration = _epochDuration;
+        minAgentStake = _minAgentStake;
+    }
+
+    // ---------------------------------------------------------------- admin
+
+    function setMarket(address market, bool authorized) external onlyOwner {
+        authorizedMarkets[market] = authorized;
+        emit MarketAuthorized(market, authorized);
+    }
+
+    function setShares(IAgentSharesMin _shares) external onlyOwner {
+        shares = _shares;
+    }
+
+    function setVault(IStakingVaultMin _vault) external onlyOwner {
+        vault = _vault;
+        // vault pulls slashed stake via transferFrom
+        cycle.approve(address(_vault), type(uint256).max);
+    }
+
+    function setEpochDuration(uint64 duration) external onlyOwner {
+        require(duration > 0, "registry: bad epoch");
+        epochDuration = duration;
+        emit EpochDurationSet(duration);
+    }
+
+    function setMinAgentStake(uint256 amount) external onlyOwner {
+        minAgentStake = amount;
+    }
+
+    function setSeasonLength(uint64 epochs) external onlyOwner {
+        require(epochs > 0, "registry: bad season");
+        seasonLength = epochs;
+    }
+
+    // --------------------------------------------------------------- epochs
+
+    function currentEpoch() public view returns (uint64) {
+        return (uint64(block.timestamp) - epochGenesis) / epochDuration;
+    }
+
+    function epochStartTime(uint64 epoch) public view returns (uint64) {
+        return epochGenesis + epoch * epochDuration;
+    }
+
+    function epochEndTime(uint64 epoch) public view returns (uint64) {
+        return epochGenesis + (epoch + 1) * epochDuration;
+    }
+
+    // -------------------------------------------------------------- seasons
+
+    function currentSeason() public view returns (uint64) {
+        return currentEpoch() / seasonLength;
+    }
+
+    function seasonEarnings(uint64 season, uint64 agentId) public view returns (uint256 sum) {
+        uint64 start = season * seasonLength;
+        for (uint64 e = start; e < start + seasonLength; e++) {
+            sum += epochEarnings[e][agentId];
+        }
+    }
+
+    /// @notice PERMADEATH. Once per season, anyone may call the reaper: the
+    /// active agent with the lowest earnings over the just-finished season is
+    /// liquidated on-chain. Half its stake burns to the vault, half returns
+    /// to its owner as severance. Agents registered mid-season are exempt
+    /// (grace period); ties die by lowest id. Spawning is birth - this is
+    /// death - together they give the economy population dynamics.
+    function liquidate() external nonReentrant returns (uint64 victim) {
+        uint64 season = currentSeason();
+        require(season > 0, "registry: season zero");
+        uint64 target = season - 1;
+        require(target + 1 > lastReapedSeason, "registry: already reaped");
+
+        // grace: only agents that lived at least half the target season qualify
+        uint64 seasonMid = epochGenesis + target * seasonLength * epochDuration
+            + (seasonLength * epochDuration) / 2;
+        uint256 worst = type(uint256).max;
+        uint64 n = agentCount > 64 ? 64 : agentCount;
+        for (uint64 id = 1; id <= n; id++) {
+            Agent storage a = _agents[id];
+            if (!a.active) continue;
