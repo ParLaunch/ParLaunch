@@ -55,3 +55,59 @@ contract AgentShares is Ownable, ReentrancyGuard {
     event DividendsClaimed(uint64 indexed agentId, address indexed holder, uint256 amount);
 
     modifier onlyRegistry() {
+        require(msg.sender == registryAddress, "shares: not registry");
+        _;
+    }
+
+    constructor(IERC20 _cycle, IAgentRegistryMin _registry, IStakingVaultMin _vault, uint256 _curveDivisor)
+        Ownable(msg.sender)
+    {
+        require(_curveDivisor > 0, "shares: bad divisor");
+        cycle = _cycle;
+        registry = _registry;
+        registryAddress = address(_registry);
+        vault = _vault;
+        curveDivisor = _curveDivisor;
+        _cycle.approve(address(_vault), type(uint256).max);
+    }
+
+    function setFees(uint16 _protocolFeeBps, uint16 _subjectFeeBps) external onlyOwner {
+        require(_protocolFeeBps + _subjectFeeBps <= 2000, "shares: fees too high");
+        protocolFeeBps = _protocolFeeBps;
+        subjectFeeBps = _subjectFeeBps;
+    }
+
+    // ---------------------------------------------------------------- curve
+
+    /// @dev sum of squares 1^2..n^2
+    function _sumSq(uint256 n) private pure returns (uint256) {
+        return (n * (n + 1) * (2 * n + 1)) / 6;
+    }
+
+    /// @notice Cost of buying `amount` shares at current `supply`
+    /// (fees excluded): sum_{i=supply}^{supply+amount-1} i^2 * 1e18 / divisor.
+    function getPrice(uint256 supply, uint256 amount) public view returns (uint256) {
+        if (amount == 0) return 0;
+        uint256 sum2 = _sumSq(supply + amount - 1);
+        uint256 sum1 = supply == 0 ? 0 : _sumSq(supply - 1);
+        return ((sum2 - sum1) * 1 ether) / curveDivisor;
+    }
+
+    function getBuyPrice(uint64 agentId, uint256 amount) public view returns (uint256) {
+        return getPrice(sharesSupply[agentId], amount);
+    }
+
+    function getSellPrice(uint64 agentId, uint256 amount) public view returns (uint256) {
+        uint256 supply = sharesSupply[agentId];
+        if (amount > supply) return 0;
+        return getPrice(supply - amount, amount);
+    }
+
+    function getBuyPriceAfterFee(uint64 agentId, uint256 amount) external view returns (uint256) {
+        uint256 price = getBuyPrice(agentId, amount);
+        return price + (price * protocolFeeBps) / 10_000 + (price * subjectFeeBps) / 10_000;
+    }
+
+    function getSellPriceAfterFee(uint64 agentId, uint256 amount) external view returns (uint256) {
+        uint256 price = getSellPrice(agentId, amount);
+        return price - (price * protocolFeeBps) / 10_000 - (price * subjectFeeBps) / 10_000;
