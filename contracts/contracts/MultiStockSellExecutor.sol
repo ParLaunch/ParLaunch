@@ -51,3 +51,55 @@ contract MultiStockSellExecutor {
     event StockSold(
         address indexed seller,
         string symbol,
+        address indexed stockToken,
+        uint256 stockTokensSold,
+        uint256 usdgReceived
+    );
+
+    error ReentrantCall();
+    error UnsupportedStock(address token);
+    error InvalidAmount();
+    error DeadlineExpired();
+    error TokenCallFailed();
+    error InsufficientOutput(uint256 received, uint256 minimum);
+
+    constructor() {
+        _authorize(NVDA);
+        _authorize(TSLA);
+        _authorize(AAPL);
+        _authorize(MSFT);
+        _authorize(SPY);
+        _authorize(META);
+        _authorize(GOOGL);
+    }
+
+    function sellStock(
+        address stockToken,
+        uint256 stockIn,
+        uint256 minUsdgOut,
+        uint256 deadline
+    ) external returns (uint256 received) {
+        string memory symbol = symbolOf(stockToken);
+        if (entered) revert ReentrantCall();
+        if (stockIn == 0 || stockIn > type(uint128).max || minUsdgOut > type(uint128).max) {
+            revert InvalidAmount();
+        }
+        if (block.timestamp > deadline) revert DeadlineExpired();
+        entered = true;
+
+        _safeTransferFrom(stockToken, msg.sender, address(this), stockIn);
+        uint256 beforeBalance = IERC20MultiStockSell(USDG).balanceOf(address(this));
+
+        PathKey[] memory path = new PathKey[](1);
+        path[0] = PathKey({
+            intermediateCurrency: USDG,
+            fee: 3000,
+            tickSpacing: 60,
+            hooks: address(0),
+            hookData: bytes("")
+        });
+        uint256[] memory minHopPriceX36 = new uint256[](0);
+        ExactInputParams memory swap = ExactInputParams({
+            currencyIn: stockToken,
+            path: path,
+            minHopPriceX36: minHopPriceX36,
