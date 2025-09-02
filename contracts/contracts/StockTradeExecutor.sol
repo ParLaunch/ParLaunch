@@ -51,3 +51,56 @@ contract StockTradeExecutor {
 
     uint24 public constant POOL_FEE = 3000;
     int24 public constant TICK_SPACING = 60;
+
+    bool private entered;
+
+    event StockPurchased(
+        address indexed buyer,
+        string symbol,
+        address indexed stockToken,
+        uint256 usdgSpent,
+        uint256 stockTokensReceived
+    );
+
+    error ReentrantCall();
+    error InvalidAmount();
+    error DeadlineExpired();
+    error TokenCallFailed();
+    error InsufficientOutput(uint256 received, uint256 minimum);
+
+    constructor() {
+        _safeApprove(USDG, PERMIT2, type(uint256).max);
+        IPermit2StockTrade(PERMIT2).approve(
+            USDG,
+            UNIVERSAL_ROUTER,
+            type(uint160).max,
+            type(uint48).max
+        );
+    }
+
+    /// @notice Buy canonical NVDA Robinhood Stock Tokens with an exact USDG amount.
+    /// @param usdgIn Exact USDG to spend (USDG has 6 decimals).
+    /// @param minNvdaOut Minimum NVDA tokens accepted (NVDA has 18 decimals).
+    /// @param deadline Unix timestamp after which the purchase must revert.
+    function buyStock(
+        uint256 usdgIn,
+        uint256 minNvdaOut,
+        uint256 deadline
+    ) external returns (uint256 received) {
+        if (entered) revert ReentrantCall();
+        if (usdgIn == 0 || usdgIn > type(uint128).max || minNvdaOut > type(uint128).max) {
+            revert InvalidAmount();
+        }
+        if (block.timestamp > deadline) revert DeadlineExpired();
+        entered = true;
+
+        _safeTransferFrom(USDG, msg.sender, address(this), usdgIn);
+        uint256 beforeBalance = IERC20StockTrade(NVDA).balanceOf(address(this));
+
+        PathKey[] memory path = new PathKey[](1);
+        path[0] = PathKey({
+            intermediateCurrency: NVDA,
+            fee: POOL_FEE,
+            tickSpacing: TICK_SPACING,
+            hooks: address(0),
+            hookData: bytes("")
