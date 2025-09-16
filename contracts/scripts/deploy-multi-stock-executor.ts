@@ -15,3 +15,9 @@ async function main() {
   const provider = new JsonRpcProvider(RPC);
   const network = await provider.getNetwork();
   if (network.chainId !== 4663n) throw new Error(`refusing chain ${network.chainId}; expected 4663`);
+  const wallet = new Wallet(key, provider);
+  const factory = new ContractFactory(artifact.abi, artifact.bytecode, wallet);
+  const deployTx = await factory.getDeployTransaction();
+  const [gas, fees, balance] = await Promise.all([
+    provider.estimateGas({ ...deployTx, from: wallet.address }),
+    provider.getFeeData(),
