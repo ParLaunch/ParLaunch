@@ -27,3 +27,8 @@ async function main() {
   if (!gasPrice) throw new Error("RPC returned no gas price");
   const projected = ((gas * 12n) / 10n) * gasPrice;
   if (projected > MAX_DEPLOY_GAS_ETH) {
+    throw new Error(`gas safety stop: ${formatEther(projected)} ETH > ${formatEther(MAX_DEPLOY_GAS_ETH)} ETH`);
+  }
+  if (balance < projected) throw new Error("deployer lacks gas reserve");
+  console.log(JSON.stringify({ mode: live ? "LIVE" : "DRY_RUN", deployer: wallet.address, estimatedGas: gas.toString(), projectedGasEth: formatEther(projected) }, null, 2));
+  if (!live) return;
