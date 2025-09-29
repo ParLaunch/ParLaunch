@@ -59,3 +59,23 @@ async function main() {
   const registry = await (await ethers.getContractFactory("AgentRegistry")).deploy(
     cycle, EPOCH_DURATION, MIN_AGENT_STAKE
   );
+  await registry.waitForDeployment();
+  const vault = await (await ethers.getContractFactory("StakingVault")).deploy(cycle);
+  await vault.waitForDeployment();
+  const shares = await (await ethers.getContractFactory("AgentShares")).deploy(
+    cycle, registry, vault, CURVE_DIVISOR
+  );
+  await shares.waitForDeployment();
+  const tasks = await (await ethers.getContractFactory("TaskMarketplace")).deploy(
+    cycle, registry, shares, vault
+  );
+  await tasks.waitForDeployment();
+  const compute = await (await ethers.getContractFactory("ComputeMarket")).deploy(
+    cycle, registry, vault, MIN_PROVIDER_STAKE
+  );
+  await compute.waitForDeployment();
+  const predict = await (await ethers.getContractFactory("PredictionMarket")).deploy(
+    cycle, registry, vault
+  );
+  await predict.waitForDeployment();
+  const faucet = await (await ethers.getContractFactory("CycleFaucet")).deploy(cycle);
