@@ -99,3 +99,23 @@ async function main() {
   // public networks: the swarm actors also need gas ETH from the deployer
   if (!isLocal) {
     for (const [idx] of MINTS) {
+      const to = actorAddress(idx);
+      const bal = await ethers.provider.getBalance(to);
+      if (bal < GAS_PER_ACTOR) {
+        await (await deployer.sendTransaction({ to, value: GAS_PER_ACTOR - bal })).wait();
+      }
+    }
+    console.log(`  funded swarm gas: ${MINTS.length} actors x ${ethers.formatEther(GAS_PER_ACTOR)} ETH`);
+  }
+
+  const instances = { CycleToken: cycle, AgentRegistry: registry, StakingVault: vault,
+    AgentShares: shares, TaskMarketplace: tasks, ComputeMarket: compute,
+    PredictionMarket: predict, CycleFaucet: faucet };
+
+  const rpcUrl = isLocal
+    ? "http://127.0.0.1:8545"
+    : (process.env.BASE_SEPOLIA_RPC || "https://sepolia.base.org");
+
+  const addresses: Record<string, unknown> = {
+    network: network.name,
+    chainId: network.config.chainId ?? 31337,
