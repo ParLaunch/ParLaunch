@@ -44,3 +44,49 @@ async function main() {
   if (network.chainId !== 4663n) throw new Error(`refusing chain ${network.chainId}; expected 4663`);
 
   const buyer = new Wallet(key, provider);
+  const usdg = new Contract(USDG, ERC20_ABI, buyer);
+  const nvda = new Contract(NVDA, ERC20_ABI, buyer);
+  const [ethBalance, usdgBalance, nvdaBefore, fees] = await Promise.all([
+    provider.getBalance(buyer.address),
+    usdg.balanceOf(buyer.address),
+    nvda.balanceOf(buyer.address),
+    provider.getFeeData(),
+  ]);
+  if (usdgBalance < AMOUNT_IN) throw new Error("agent 1 has less than the exact 0.25 USDG test amount");
+
+  const gasPrice = fees.maxFeePerGas ?? fees.gasPrice;
+  if (!gasPrice) throw new Error("RPC returned no usable gas price");
+  const conservativeCost = CONSERVATIVE_GAS_UNITS * gasPrice;
+  if (conservativeCost > MAX_GAS_COST) {
+    throw new Error(
+      `gas safety stop: projected ${formatEther(conservativeCost)} ETH exceeds ${formatEther(MAX_GAS_COST)} ETH`,
+    );
+  }
+  if (ethBalance < conservativeCost) throw new Error("agent 1 lacks the conservative gas reserve");
+
+  const quoter = new Contract(QUOTER, QUOTER_ABI, buyer);
+  const [quotedOut] = await quoter.quoteExactInputSingle.staticCall({
+    poolKey: {
+      currency0: USDG,
+      currency1: NVDA,
+      fee: 3000,
+      tickSpacing: 60,
+      hooks: "0x0000000000000000000000000000000000000000",
+    },
+    zeroForOne: true,
+    exactAmount: AMOUNT_IN,
+    hookData: "0x",
+  });
+  const minOut = (quotedOut * 99n) / 100n;
+
+  console.log(JSON.stringify({
+    mode: live ? "LIVE" : "DRY_RUN",
+    buyer: buyer.address,
+    spendUsdg: formatUnits(AMOUNT_IN, 6),
+    quotedNvda: formatUnits(quotedOut, 18),
+    gasPriceWei: gasPrice.toString(),
+    conservativeGasEth: formatEther(conservativeCost),
+    maxGasEth: formatEther(MAX_GAS_COST),
+  }, null, 2));
+
+  if (!live) {
