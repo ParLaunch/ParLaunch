@@ -115,3 +115,62 @@ describe("AgentRegistry", () => {
 
   it("returns remaining stake to the owner after deactivation", async () => {
     const f = await loadFixture(deployProtocol);
+    await registerAgent(f.registry, f.agentOwner, f.agentWallet1);
+    await expect(f.registry.connect(f.agentOwner).withdrawStake(1)).to.be.revertedWith("registry: still active");
+    await expect(f.registry.connect(f.poster).deactivateAgent(1)).to.be.revertedWith("registry: not authorized");
+
+    await f.registry.connect(f.agentWallet1).deactivateAgent(1); // agent can retire itself
+    await expect(f.registry.connect(f.poster).withdrawStake(1)).to.be.revertedWith("registry: not owner");
+
+    const before = await f.cycle.balanceOf(f.agentOwner.address);
+    await f.registry.connect(f.agentOwner).withdrawStake(1);
+    expect(await f.cycle.balanceOf(f.agentOwner.address)).to.equal(before + MIN_AGENT_STAKE);
+  });
+
+  it("advances epochs with time", async () => {
+    const f = await loadFixture(deployProtocol);
+    const e0 = await f.registry.currentEpoch();
+    await time.increase(EPOCH_DURATION);
+    expect(await f.registry.currentEpoch()).to.equal(e0 + 1n);
+    expect(await f.registry.epochEndTime(e0)).to.equal(
+      (await f.registry.epochGenesis()) + (e0 + 1n) * EPOCH_DURATION
+    );
+  });
+
+  it("the reaper liquidates the season's weakest agent, once, with a grace period", async () => {
+    const f = await loadFixture(deployProtocol);
+    await registerAgent(f.registry, f.agentOwner, f.agentWallet1, "Strong");
+    await registerAgent(f.registry, f.agentOwner, f.agentWallet2, "Weak");
+    await f.registry.setMarket(f.deployer.address, true);
+    await expect(f.registry.liquidate()).to.be.revertedWith("registry: season zero");
+
+    await f.registry.recordTaskOutcome(1, E(500), true); // Strong earns in season 0
+
+    await time.increase(EPOCH_DURATION * 3n); // into season 1
+    await registerAgent(f.registry, f.poster, f.agentWallet3, "Newborn"); // grace-exempt
+
+    const ownerBefore = await f.cycle.balanceOf(f.agentOwner.address);
+    const vaultBefore = await f.vault.totalFeesReceived();
+    await f.registry.liquidate();
+
+    const weak = await f.registry.getAgent(2);
+    expect(weak.active).to.equal(false);
+    expect(weak.stake).to.equal(0n);
+    // half the 100 stake burns to the vault, half returns as severance
+    expect(await f.cycle.balanceOf(f.agentOwner.address)).to.equal(ownerBefore + E(50));
+    expect((await f.vault.totalFeesReceived()) - vaultBefore).to.equal(E(50));
+    expect((await f.registry.getAgent(1)).active).to.equal(true);  // top earner lives
+    expect((await f.registry.getAgent(3)).active).to.equal(true);  // newborn protected
+
+    await expect(f.registry.liquidate()).to.be.revertedWith("registry: already reaped");
+  });
+
+  it("paginates agents", async () => {
+    const f = await loadFixture(deployProtocol);
+    await registerAgent(f.registry, f.agentOwner, f.agentWallet1, "A");
+    await registerAgent(f.registry, f.agentOwner, f.agentWallet2, "B");
+    await registerAgent(f.registry, f.agentOwner, f.agentWallet3, "C");
+    const page = await f.registry.getAgents(1, 10);
+    expect(page.length).to.equal(2);
+    expect(page[0].name).to.equal("B");
+    expect((await f.registry.getAgents(5, 10)).length).to.equal(0);
