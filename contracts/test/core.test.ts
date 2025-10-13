@@ -57,3 +57,61 @@ describe("AgentRegistry", () => {
 
   it("records parent when an agent wallet spawns a sub-agent", async () => {
     const f = await loadFixture(deployProtocol);
+    await registerAgent(f.registry, f.agentOwner, f.agentWallet1, "Parent");
+    // the PARENT AGENT'S WALLET registers a child, staking from its own funds
+    await f.registry.connect(f.agentWallet1).registerAgent(f.agentWallet2.address, "Child", "spawned", "");
+    const child = await f.registry.getAgent(2);
+    expect(child.parentId).to.equal(1n);
+    expect(child.owner).to.equal(f.agentWallet1.address);
+  });
+
+  it("gates outcome recording to authorized markets and clamps reputation", async () => {
+    const f = await loadFixture(deployProtocol);
+    await registerAgent(f.registry, f.agentOwner, f.agentWallet1);
+    await expect(
+      f.registry.connect(f.poster).recordTaskOutcome(1, E(10), true)
+    ).to.be.revertedWith("registry: not market");
+
+    await f.registry.setMarket(f.deployer.address, true); // deployer acts as market
+    const epoch = await f.registry.currentEpoch();
+
+    await f.registry.recordTaskOutcome(1, E(10), true);
+    let a = await f.registry.getAgent(1);
+    expect(a.reputation).to.equal(110n);
+    expect(a.lifetimeEarnings).to.equal(E(10));
+    expect(a.tasksCompleted).to.equal(1n);
+    expect(await f.registry.epochEarnings(epoch, 1)).to.equal(E(10));
+    expect(await f.registry.epochTotalEarnings(epoch)).to.equal(E(10));
+
+    // three failures: 110 -> 60 -> 10 -> clamped at 0
+    for (let i = 0; i < 3; i++) await f.registry.recordTaskOutcome(1, 0, false);
+    a = await f.registry.getAgent(1);
+    expect(a.reputation).to.equal(0n);
+    expect(a.tasksFailed).to.equal(3n);
+    expect(a.lifetimeEarnings).to.equal(E(10)); // failures earn nothing
+  });
+
+  it("slashes stake into the vault and deactivates when stake collapses", async () => {
+    const f = await loadFixture(deployProtocol);
+    await registerAgent(f.registry, f.agentOwner, f.agentWallet1);
+    await f.registry.setMarket(f.deployer.address, true);
+
+    await f.registry.slashStake(1, E(30), "bad result");
+    let a = await f.registry.getAgent(1);
+    expect(a.stake).to.equal(E(70));
+    expect(a.active).to.equal(true);
+    expect(await f.vault.totalFeesReceived()).to.equal(E(30));
+
+    // stake drops to 20 < minStake/2 = 50 -> deactivated; slash caps at stake
+    await f.registry.slashStake(1, E(50), "again");
+    a = await f.registry.getAgent(1);
+    expect(a.stake).to.equal(E(20));
+    expect(a.active).to.equal(false);
+
+    await f.registry.slashStake(1, E(9999), "overkill caps at stake");
+    a = await f.registry.getAgent(1);
+    expect(a.stake).to.equal(0n);
+  });
+
+  it("returns remaining stake to the owner after deactivation", async () => {
+    const f = await loadFixture(deployProtocol);
