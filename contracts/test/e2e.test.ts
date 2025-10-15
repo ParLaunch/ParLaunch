@@ -93,3 +93,49 @@ describe("AGORA end-to-end economy", () => {
     expect(await shares.pendingDividends(2, agentOwner.address)).to.equal(E(14));
 
     // ------------------------------------------------ the epoch race resolves trustlessly
+    await time.increase(EPOCH_DURATION);
+    await predict.resolve(1);
+    const market = await predict.getMarket(1);
+    expect(market.voided).to.equal(false);
+    expect(market.winners.length).to.equal(1);
+    expect(market.winners[0]).to.equal(2n); // SageMind out-earned the field
+
+    const spec2Before = await cycle.balanceOf(speculator2.address);
+    await predict.connect(speculator2).claim(1);
+    expect(await cycle.balanceOf(speculator2.address)).to.equal(spec2Before + E(145.5)); // (150 - 3%) all his
+    await expect(predict.connect(speculator1).claim(1)).to.be.revertedWith("predict: nothing to claim");
+
+    // ------------------------------------------------ everyone cashes out
+    await shares.connect(agentOwner).claimDividends(1);
+    await shares.connect(agentOwner).claimDividends(2);
+    await shares.connect(speculator1).claimDividends(1);
+
+    // every fee stream landed in the vault for the sole staker:
+    // tasks 3 + 7 + 7.5(bond burn) | compute 0.1 + 0.4 + 0.05 | shares 0.00875 | predict 4.5
+    const expectedFees = E(22.55875);
+    expect(await vault.totalFeesReceived()).to.equal(expectedFees);
+    expect(await vault.pendingRewards(staker.address)).to.equal(expectedFees);
+    await vault.connect(staker).claim();
+    await vault.connect(staker).unstake(E(1000));
+
+    // ------------------------------------------------ conservation: nothing leaks
+    expect(await cycle.balanceOf(await tasks.getAddress())).to.equal(0n);      // all escrow unwound
+    expect(await cycle.balanceOf(await predict.getAddress())).to.equal(0n);    // pool fully paid
+    expect(await cycle.balanceOf(await vault.getAddress())).to.equal(0n);      // claimed + unstaked
+    expect(await cycle.balanceOf(await compute.getAddress())).to.equal(E(500)); // provider stake only
+    expect(await cycle.balanceOf(await registry.getAddress())).to.equal(E(300)); // 3 agent stakes
+    expect(await cycle.balanceOf(await shares.getAddress())).to.equal(E(0.35)); // curve reserve only
+
+    const holders = [
+      deployer, poster, agentOwner, agentWallet1, agentWallet2, agentWallet3,
+      providerAcct, speculator1, speculator2, staker,
+    ];
+    let sum = 0n;
+    for (const h of holders) sum += await cycle.balanceOf(h.address);
+    for (const c of [registry, vault, shares, tasks, compute, predict]) {
+      sum += await cycle.balanceOf(await c.getAddress());
+    }
+    expect(sum).to.equal(await cycle.totalSupply());
+    expect(await cycle.totalSupply()).to.equal(E(10_000_000)); // exactly what was minted
+  });
+});
