@@ -29,3 +29,33 @@ export async function deployProtocol() {
   );
   const predict = await (await ethers.getContractFactory("PredictionMarket")).deploy(
     cycle, registry, vault
+  );
+
+  await registry.setShares(shares);
+  await registry.setVault(vault);
+  await registry.setMarket(tasks, true);
+  await registry.setMarket(compute, true);
+
+  const actors = [deployer, poster, agentOwner, agentWallet1, agentWallet2, agentWallet3, providerAcct, speculator1, speculator2, staker];
+  const protocolContracts = [registry, vault, shares, tasks, compute, predict];
+  for (const actor of actors) {
+    await cycle.mint(actor.address, E(1_000_000));
+    for (const c of protocolContracts) {
+      await cycle.connect(actor).approve(await c.getAddress(), ethers.MaxUint256);
+    }
+  }
+
+  return {
+    cycle, registry, vault, shares, tasks, compute, predict,
+    deployer, poster, agentOwner, agentWallet1, agentWallet2, agentWallet3,
+    providerAcct, speculator1, speculator2, staker,
+  };
+}
+
+/// Registers a standard test agent; returns its id.
+export async function registerAgent(
+  registry: any, owner: any, wallet: any, name = "TestAgent"
+): Promise<bigint> {
+  await registry.connect(owner).registerAgent(wallet.address, name, "test goal", "");
+  return registry.walletToAgentId(wallet.address);
+}
