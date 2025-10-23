@@ -43,3 +43,48 @@ describe("MultiStockTradeExecutor (Robinhood Chain fork)", function () {
     const executor = await Factory.deploy();
     const deployReceipt = await executor.deploymentTransaction()!.wait();
     await (await usdg.approve(await executor.getAddress(), totalIn)).wait();
+
+    let purchaseGas = 0n;
+    for (const [symbol, token] of STOCKS) {
+      const usdgIsCurrency0 = BigInt(USDG) < BigInt(token);
+      const [quotedOut] = await quoter.quoteExactInputSingle.staticCall({
+        poolKey: {
+          currency0: usdgIsCurrency0 ? USDG : token,
+          currency1: usdgIsCurrency0 ? token : USDG,
+          fee: 3000,
+          tickSpacing: 60,
+          hooks: ZERO,
+        },
+        zeroForOne: usdgIsCurrency0,
+        exactAmount: amountIn,
+        hookData: "0x",
+      });
+      const minOut = (quotedOut * 99n) / 100n;
+      const stock = new ethers.Contract(token, ERC20_ABI, buyer);
+      const before = await stock.balanceOf(buyer.address);
+      const tx = await executor.buyStock(
+        token,
+        amountIn,
+        minOut,
+        Math.floor(Date.now() / 1000) + 300,
+      );
+      const receipt = await tx.wait();
+      purchaseGas += receipt!.gasUsed;
+      const received = (await stock.balanceOf(buyer.address)) - before;
+
+      expect(received).to.be.gte(minOut);
+      await expect(tx)
+        .to.emit(executor, "StockPurchased")
+        .withArgs(buyer.address, symbol, token, amountIn, received);
+    }
+
+    console.log(JSON.stringify({
+      basket: STOCKS.map(([symbol]) => symbol),
+      usdgSpent: ethers.formatUnits(totalIn, 6),
+      gas: {
+        deploy: deployReceipt!.gasUsed.toString(),
+        sevenPurchases: purchaseGas.toString(),
+      },
+    }));
+  });
+});
