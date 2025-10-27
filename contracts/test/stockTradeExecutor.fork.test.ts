@@ -42,3 +42,48 @@ describe("StockTradeExecutor (Robinhood Chain fork)", function () {
       hookData: "0x",
     });
     const minOut = (quotedOut * 99n) / 100n;
+
+    const approveTx = await usdg.approve(await executor.getAddress(), amountIn);
+    const approveReceipt = await approveTx.wait();
+    const beforeUsdg = await usdg.balanceOf(buyer.address);
+    const beforeNvda = await nvda.balanceOf(buyer.address);
+
+    console.log("fork executor", await executor.getAddress(), "quoted", quotedOut.toString());
+    try {
+      await executor.buyStock.staticCall(
+        amountIn,
+        minOut,
+        Math.floor(Date.now() / 1000) + 300,
+      );
+    } catch (error: any) {
+      console.log("fork revert", error?.data ?? error?.info?.error?.data ?? error?.message);
+      throw error;
+    }
+
+    const purchaseTx = await executor.buyStock(
+      amountIn,
+      minOut,
+      Math.floor(Date.now() / 1000) + 300,
+    );
+    const purchaseReceipt = await purchaseTx.wait();
+    const afterUsdg = await usdg.balanceOf(buyer.address);
+    const afterNvda = await nvda.balanceOf(buyer.address);
+
+    expect(beforeUsdg - afterUsdg).to.equal(amountIn);
+    expect(afterNvda - beforeNvda).to.be.gte(minOut);
+    await expect(purchaseTx)
+      .to.emit(executor, "StockPurchased")
+      .withArgs(buyer.address, "NVDA", NVDA, amountIn, afterNvda - beforeNvda);
+
+    console.log(JSON.stringify({
+      executor: await executor.getAddress(),
+      quotedNvda: ethers.formatUnits(quotedOut, 18),
+      receivedNvda: ethers.formatUnits(afterNvda - beforeNvda, 18),
+      gas: {
+        deploy: deployReceipt!.gasUsed.toString(),
+        approve: approveReceipt!.gasUsed.toString(),
+        purchase: purchaseReceipt!.gasUsed.toString(),
+      },
+    }));
+  });
+});
