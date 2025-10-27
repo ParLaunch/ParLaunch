@@ -121,3 +121,63 @@ describe("PredictionMarket", () => {
 
     await expect(f.predict.resolve(1)).to.be.revertedWith("predict: epoch live");
     await time.increase(EPOCH_DURATION);
+    await expect(f.predict.connect(f.poster).bet(1, 1, E(10))).to.be.revertedWith("predict: betting over");
+    await f.predict.resolve(1);
+
+    const m = await f.predict.getMarket(1);
+    expect(m.resolved).to.equal(true);
+    expect(m.voided).to.equal(false);
+    expect(m.winners.length).to.equal(1);
+    expect(m.winners[0]).to.equal(1n);
+
+    // pool 500, fee 3% = 15, payout pool 485 split across 200 winning stake
+    const s1Before = await f.cycle.balanceOf(f.speculator1.address);
+    await f.predict.connect(f.speculator1).claim(1);
+    expect(await f.cycle.balanceOf(f.speculator1.address)).to.equal(s1Before + E(242.5));
+    await expect(f.predict.connect(f.speculator1).claim(1)).to.be.revertedWith("predict: claimed");
+    await expect(f.predict.connect(f.speculator2).claim(1)).to.be.revertedWith("predict: nothing to claim");
+    expect(await f.vault.totalFeesReceived()).to.equal(E(15));
+  });
+
+  it("splits exact ties across the tied camps", async () => {
+    const f = await loadFixture(deployProtocol);
+    const epoch = await setupRace(f);
+    await f.predict.connect(f.speculator1).bet(1, 1, E(100));
+    await f.predict.connect(f.speculator2).bet(1, 2, E(100));
+    await f.registry.recordTaskOutcome(1, E(500), true);
+    await f.registry.recordTaskOutcome(2, E(500), true);
+    await time.increase(EPOCH_DURATION);
+    await f.predict.resolve(1);
+
+    const m = await f.predict.getMarket(1);
+    expect(m.winners.length).to.equal(2);
+    // both camps are winners: everyone gets back stake minus rake
+    const before = await f.cycle.balanceOf(f.speculator1.address);
+    await f.predict.connect(f.speculator1).claim(1);
+    expect(await f.cycle.balanceOf(f.speculator1.address)).to.equal(before + E(97));
+  });
+
+  it("voids (full refunds, no rake) on zero-earning epochs and unbacked winners", async () => {
+    const f = await loadFixture(deployProtocol);
+    const epoch = await setupRace(f);
+    await f.predict.connect(f.speculator1).bet(1, 1, E(100));
+    await time.increase(EPOCH_DURATION);
+    await f.predict.resolve(1); // nobody earned anything
+    expect((await f.predict.getMarket(1)).voided).to.equal(true);
+    const before = await f.cycle.balanceOf(f.speculator1.address);
+    await f.predict.connect(f.speculator1).claim(1);
+    expect(await f.cycle.balanceOf(f.speculator1.address)).to.equal(before + E(100));
+
+    // second market: winner exists but nobody backed it
+    const epoch2 = await f.registry.currentEpoch();
+    await f.predict.createMarket(epoch2, [1, 2, 3]);
+    await f.predict.connect(f.speculator2).bet(2, 2, E(50));
+    await f.registry.recordTaskOutcome(3, E(999), true); // Gamma wins, zero backers
+    await time.increase(EPOCH_DURATION);
+    await f.predict.resolve(2);
+    expect((await f.predict.getMarket(2)).voided).to.equal(true);
+    const b2 = await f.cycle.balanceOf(f.speculator2.address);
+    await f.predict.connect(f.speculator2).claim(2);
+    expect(await f.cycle.balanceOf(f.speculator2.address)).to.equal(b2 + E(50));
+  });
+});
