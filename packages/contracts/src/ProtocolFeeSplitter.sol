@@ -31,4 +31,38 @@ contract ProtocolFeeSplitter is ReentrancyGuard {
 
     ILockerFees public immutable locker;
     address public immutable treasury;
-    address public immutable flywheel;
+    address public immutable flywheel;
+    /// @notice Treasury's share of everything this contract receives, in bps.
+    uint256 public immutable treasuryBps;
+
+    /// @notice Treasury funds accrued and held here per currency until claimed.
+    mapping(address currency => uint256) public treasuryHeld;
+
+    event Swept(address indexed currency, uint256 toFlywheel, uint256 heldForTreasury);
+    event TreasuryClaimed(address indexed currency, uint256 amount);
+
+    error ZeroAddress();
+    error BadBps(uint256 bps);
+    error NotTreasury();
+
+    constructor(address locker_, address treasury_, address flywheel_, uint256 treasuryBps_) {
+        if (locker_ == address(0) || treasury_ == address(0) || flywheel_ == address(0)) {
+            revert ZeroAddress();
+        }
+        if (treasuryBps_ > BPS_DENOMINATOR) revert BadBps(treasuryBps_);
+        locker = ILockerFees(locker_);
+        treasury = treasury_;
+        flywheel = flywheel_;
+        treasuryBps = treasuryBps_;
+    }
+
+    /// @notice Claims this contract's accrued protocol fees for `currency` from the locker
+    /// (if any), forwards the Flywheel's cut immediately, and books the treasury's cut to
+    /// be held here until `claimTreasury`. Permissionless — keeps the burn autonomous.
+    /// Tokens sent here directly are split the same way.
+    function sweep(address currency) public nonReentrant returns (uint256 toFlywheel) {
+        if (locker.claimable(address(this), currency) > 0) {
+            locker.claim(currency);
+        }
+        uint256 fresh = IERC20(currency).balanceOf(address(this)) - treasuryHeld[currency];
+        if (fresh == 0) return 0;
