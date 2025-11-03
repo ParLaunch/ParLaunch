@@ -105,4 +105,57 @@ contract ProtocolFeeSplitterTest is BaseTest {
         assertEq(IERC20(token).balanceOf(flywheelSink), toFlywheel);
         assertEq(splitter.treasuryHeld(token), accrued - toFlywheel);
     }
-
+
+    function test_sweepWithNothingAccruedIsANoop() public {
+        assertEq(splitter.sweep(address(wnative)), 0);
+        assertEq(splitter.treasuryHeld(address(wnative)), 0);
+    }
+
+    function test_repeatSweepDoesNotDoubleCountHeldFunds() public {
+        _tradeAndCollect();
+        splitter.sweep(address(wnative));
+        uint256 heldAfterFirst = splitter.treasuryHeld(address(wnative));
+        uint256 flywheelAfterFirst = IERC20(address(wnative)).balanceOf(flywheelSink);
+        // sweeping again with no new fees must change nothing
+        assertEq(splitter.sweep(address(wnative)), 0);
+        assertEq(splitter.treasuryHeld(address(wnative)), heldAfterFirst);
+        assertEq(IERC20(address(wnative)).balanceOf(flywheelSink), flywheelAfterFirst);
+    }
+
+    function test_sweepSplitsDirectDonations() public {
+        vm.deal(address(this), 1 ether);
+        wnative.deposit{value: 1 ether}();
+        IERC20(address(wnative)).transfer(address(splitter), 1 ether);
+        uint256 toFlywheel = splitter.sweep(address(wnative));
+        assertEq(toFlywheel, 0.25 ether);
+        assertEq(splitter.treasuryHeld(address(wnative)), 0.75 ether);
+    }
+
+    function test_treasuryClaimableView() public {
+        _tradeAndCollect();
+        uint256 pending = locker.claimable(address(splitter), address(wnative));
+        assertEq(
+            splitter.treasuryClaimable(address(wnative)),
+            (pending * TREASURY_BPS) / 10_000,
+            "view counts unclaimed locker fees before any sweep"
+        );
+        splitter.sweep(address(wnative));
+        assertEq(
+            splitter.treasuryClaimable(address(wnative)),
+            splitter.treasuryHeld(address(wnative)),
+            "view matches held funds after sweep"
+        );
+    }
+
+    function test_sweepMany() public {
+        _tradeAndCollect();
+        address[] memory currencies = new address[](2);
+        currencies[0] = address(wnative);
+        currencies[1] = token;
+        splitter.sweepMany(currencies);
+        assertEq(locker.claimable(address(splitter), address(wnative)), 0);
+        assertEq(locker.claimable(address(splitter), token), 0);
+        assertGt(IERC20(address(wnative)).balanceOf(flywheelSink), 0);
+        assertGt(splitter.treasuryHeld(token), 0);
+    }
+}
