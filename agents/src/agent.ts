@@ -211,3 +211,74 @@ export class AgentRunner {
       this.log(`task #${taskId}: result submitted (${answer.slice(0, 24)}${answer.length > 24 ? "..." : ""})`);
     }
   }
+
+  /** Shop the compute market: cheapest active provider with capacity. */
+  private async rentCompute(units: number, rentSecs: number): Promise<bigint | null> {
+    const providers = await this.c.compute.getProviders(0, 50);
+    // spread: ethers v6 returns frozen Result arrays - sort() would throw
+    const eligible = [...providers]
+      .filter((p: any) => p.active && Number(p.availableUnits) >= units)
+      .sort((a: any, b: any) => (a.pricePerUnitHour < b.pricePerUnitHour ? -1 : 1));
+    for (const p of eligible) {
+      try {
+        const receipt = await this.tx(async () => {
+          const tx = await this.c.compute.rent(p.id, units, rentSecs);
+          return tx.wait();
+        });
+        let id: bigint | null = null;
+        for (const log of receipt!.logs) {
+          try {
+            const parsed = this.c.compute.interface.parseLog(log);
+            if (parsed?.name === "RentalRequested") { id = parsed.args.rentalId; break; }
+          } catch { /* not ours */ }
+        }
+        if (id === null) continue;
+        const rental = await this.c.compute.getRental(id);
+        this.log(`rented ${units}u x ${rentSecs}s on "${p.name}" for ${fmt(rental.cost, 2)} CYCLE`);
+        // wait for the provider to confirm the allocation (fleet sim picks it up)
+        for (let i = 0; i < 15; i++) {
+          const r = await this.c.compute.getRental(id);
+          if (Number(r.status) === 1) return id; // Active
+          await sleep(2000);
+        }
+        this.log(paint.yellow(`provider "${p.name}" never confirmed - cancelling, trying next`));
+        await this.send(() => this.c.compute.cancelRental(id!));
+      } catch {
+        continue; // capacity race - try the next provider
+      }
+    }
+    this.log(paint.yellow("no compute available - running degraded on local scraps"));
+    return null;
+  }
+
+  // ------------------------------------------------------------ compounding
+
+  private async maybeCompound(): Promise<void> {
+    const balance: bigint = await this.c.cycle.balanceOf(this.wallet.address);
+
+    // reinvest: buy a share of yourself (founder conviction, capped position)
+    if (this.persona.buysOwnShares && balance > E(500) && Math.random() < 0.06) {
+      const held: bigint = await this.c.shares.sharesBalance(this.agentId, this.wallet.address);
+      const price: bigint = await this.c.shares.getBuyPriceAfterFee(this.agentId, 1);
+      if (held < 4n && price < balance / 40n && (await this.send(() => this.c.shares.buyShares(this.agentId, 1)))) {
+        this.log(`aped 1 share of myself for ${fmt(price, 2)} CYCLE - skin in the game`);
+      }
+    }
+
+    // spawn: fund a child wallet, register it on-chain as MY descendant
+    if (this.persona.spawnThreshold > 0n && balance > this.persona.spawnThreshold && this.childrenSpawned < 2 && this.onSpawn) {
+      this.childrenSpawned++;
+      const child = ethers.Wallet.createRandom().connect(this.wallet.provider!) as unknown as ethers.Wallet;
+      const persona = childPersona(this.persona, this.childrenSpawned);
+      this.log(paint.bold(`balance ${fmt(balance)} CYCLE > threshold - spawning sub-agent "${persona.name}"`));
+
+      await this.tx(async () => (await this.wallet.sendTransaction({ to: child.address, value: ethers.parseEther("1") })).wait());
+      await this.tx(async () => (await this.c.cycle.transfer(child.address, E(1500))).wait());
+      // the parent wallet registers the child => registry records parentId = me
+      await this.tx(async () => (await this.c.registry.registerAgent(child.address, persona.name, persona.goal, "")).wait());
+
+      const runner = new AgentRunner(persona, child, this.addresses, this.onSpawn);
+      this.onSpawn(runner);
+    }
+  }
+}
