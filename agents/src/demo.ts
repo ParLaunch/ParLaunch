@@ -69,3 +69,73 @@ async function main() {
   // the stars of the show
   for (const p of ROOT_PERSONAS) {
     const runner = new AgentRunner(p, walletAt(p.accountIndex, provider), addresses, onSpawn);
+    runners.push(runner);
+    stoppables.push(runner);
+    runner.start().catch((e) => console.error(paint.red(`agent ${p.name} crashed: ${e?.message ?? e}`)));
+    await sleep(900); // stagger startup
+  }
+
+  // ------------------------------------- user-created agents (terminal UI)
+  // POST /create {name, strategy} -> fresh agent wallet (key stays here; the
+  // server runs the brain). The USER then registers it on-chain from their
+  // own wallet (they pay the stake, they're the on-chain owner) and sends it
+  // working CYCLE. Once registered we gas it and start the loop.
+  interface PendingUserAgent { wallet: ethers.Wallet; personaKey: string; name: string; running: boolean; }
+  const userAgents = new Map<string, PendingUserAgent>();
+  const gasFunder = walletAt(1, provider); // 10k test ETH available locally
+  const statusReg = contractsFor(provider, addresses).registry;
+
+  const api = http.createServer(async (req, res) => {
+    const send = (code: number, body: unknown) => {
+      res.writeHead(code, { "content-type": "application/json", "access-control-allow-origin": "*", "access-control-allow-headers": "content-type", "access-control-allow-methods": "GET,POST,OPTIONS" });
+      res.end(JSON.stringify(body));
+    };
+    if (req.method === "OPTIONS") return send(204, {});
+    const url = new URL(req.url ?? "/", "http://localhost");
+    if (req.method === "POST" && url.pathname === "/create") {
+      let body = ""; req.on("data", (d) => (body += d));
+      req.on("end", () => {
+        try {
+          const { name, strategy } = JSON.parse(body || "{}");
+          if (!name || String(name).length > 24) return send(400, { error: "name required (max 24 chars)" });
+          if (!USER_STRATEGIES[strategy]) return send(400, { error: "unknown strategy" });
+          if (runners.length >= MAX_TOTAL_AGENTS + 8) return send(400, { error: "arena is full right now" });
+          const w = ethers.Wallet.createRandom().connect(provider) as unknown as ethers.Wallet;
+          userAgents.set(w.address.toLowerCase(), { wallet: w, personaKey: strategy, name: String(name), running: false });
+          console.log(paint.bold(`  [api] user agent "${name}" (${strategy}) awaiting on-chain registration at ${w.address}`));
+          send(200, { agentWallet: w.address, minStake: "100", suggestedFund: "600" });
+        } catch (e: any) { send(400, { error: String(e?.message ?? e).slice(0, 120) }); }
+      });
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/status") {
+      const addr = String(url.searchParams.get("wallet") ?? "").toLowerCase();
+      const p = userAgents.get(addr);
+      if (!p) return send(404, { error: "unknown agent wallet" });
+      const id = await statusReg.walletToAgentId(p.wallet.address).catch(() => 0n);
+      return send(200, { registered: id !== 0n, running: p.running, agentId: String(id) });
+    }
+    send(404, { error: "not found" });
+  });
+  api.listen(8790, () => console.log(paint.gray("  [api] agent-creation API on http://localhost:8790")));
+
+  // watcher: once the user registers + funds, gas it and wake the brain
+  const userWatcher = setInterval(async () => {
+    for (const p of userAgents.values()) {
+      if (p.running) continue;
+      try {
+        const id: bigint = await statusReg.walletToAgentId(p.wallet.address);
+        if (id === 0n) continue;
+        const gas = await provider.getBalance(p.wallet.address);
+        if (gas < ethers.parseEther("0.2")) {
+          await (await gasFunder.sendTransaction({ to: p.wallet.address, value: ethers.parseEther("0.5") })).wait();
+        }
+        p.running = true;
+        const persona = USER_STRATEGIES[p.personaKey].make(p.name);
+        const runner = new AgentRunner(persona, p.wallet, addresses, onSpawn);
+        runners.push(runner);
+        stoppables.push(runner);
+        runner.start().catch((e) => console.error(paint.red(`user agent crashed: ${e?.message ?? e}`)));
+        console.log(paint.bold(`  [api] user agent "${p.name}" is LIVE (agent #${id}) - bidding in the arena`));
+      } catch { /* next sweep */ }
+    }
