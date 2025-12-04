@@ -417,3 +417,142 @@
         ],
         "internalType": "struct PredictionMarket.Market",
         "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint64",
+        "name": "offset",
+        "type": "uint64"
+      },
+      {
+        "internalType": "uint64",
+        "name": "limit",
+        "type": "uint64"
+      }
+    ],
+    "name": "getMarkets",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint64",
+            "name": "id",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint64",
+            "name": "epoch",
+            "type": "uint64"
+          },
+          {
+            "internalType": "address",
+            "name": "creator",
+            "type": "address"
+          },
+          {
+            "internalType": "uint64",
+            "name": "bettingEnds",
+            "type": "uint64"
+          },
+          {
+            "internalType": "bool",
+            "name": "resolved",
+            "type": "bool"
+          },
+          {
+            "internalType": "bool",
+            "name": "voided",
+            "type": "bool"
+          },
+          {
+            "internalType": "uint256",
+            "name": "totalPool",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "winnersPool",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "feeTaken",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint64[]",
+            "name": "candidates",
+            "type": "uint64[]"
+          },
+          {
+            "internalType": "uint64[]",
+            "name": "winners",
+            "type": "uint64[]"
+          }
+        ],
+        "internalType": "struct PredictionMarket.Market[]",
+        "name": "out",
+        "type": "tuple[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint64",
+        "name": "marketId",
+        "type": "uint64"
+      }
+    ],
+    "name": "getPools",
+    "outputs": [
+      {
+        "internalType": "uint64[]",
+        "name": "candidates",
+        "type": "uint64[]"
+      },
+      {
+        "internalType": "uint256[]",
+        "name": "amounts",
+        "type": "uint256[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "marketCount",
+    "outputs": [
+      {
+        "internalType": "uint64",
+        "name": "",
+        "type": "uint64"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "minBet",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
