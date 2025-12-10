@@ -583,3 +583,198 @@
             "type": "uint64"
           },
           {
+            "internalType": "uint256",
+            "name": "winningBid",
+            "type": "uint256"
+          },
+          {
+            "internalType": "string",
+            "name": "spec",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "tags",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "resultURI",
+            "type": "string"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "resultHash",
+            "type": "bytes32"
+          }
+        ],
+        "internalType": "struct TaskMarketplace.Task",
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint64",
+        "name": "offset",
+        "type": "uint64"
+      },
+      {
+        "internalType": "uint64",
+        "name": "limit",
+        "type": "uint64"
+      }
+    ],
+    "name": "getTasks",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint64",
+            "name": "id",
+            "type": "uint64"
+          },
+          {
+            "internalType": "address",
+            "name": "poster",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "reward",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "agentBond",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint64",
+            "name": "createdAt",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint64",
+            "name": "biddingEnds",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint32",
+            "name": "execWindow",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint64",
+            "name": "executionDeadline",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint64",
+            "name": "reviewDeadline",
+            "type": "uint64"
+          },
+          {
+            "internalType": "enum TaskMarketplace.TaskStatus",
+            "name": "status",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint64",
+            "name": "assignedAgentId",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint256",
+            "name": "winningBid",
+            "type": "uint256"
+          },
+          {
+            "internalType": "string",
+            "name": "spec",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "tags",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "resultURI",
+            "type": "string"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "resultHash",
+            "type": "bytes32"
+          }
+        ],
+        "internalType": "struct TaskMarketplace.Task[]",
+        "name": "out",
+        "type": "tuple[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "minReward",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "owner",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "spec",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "tags",
+        "type": "string"
+      },
+      {
+        "internalType": "uint256",
+        "name": "reward",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint32",
+        "name": "biddingWindow",
+        "type": "uint32"
+      },
+      {
+        "internalType": "uint32",
+        "name": "execWindow",
+        "type": "uint32"
+      }
+    ],
+    "name": "postTask",
+    "outputs": [
