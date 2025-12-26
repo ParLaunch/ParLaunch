@@ -32,3 +32,37 @@ async function main() {
     console.error(paint.red(`chain unreachable at ${addresses.rpcUrl} - run: npm start (or npm run node + npm run deploy)`));
     process.exit(1);
   }
+
+  const wallet = walletAt(accountIndex, provider);
+  const c = contractsFor(wallet, addresses);
+  const host = new HostProvider(wallet, addresses, E(price));
+
+  console.log(paint.bold("\n  ┌─────────────────────────────────────────────────────┐"));
+  console.log(paint.bold("  │  AGORA PROVIDER - your machine is joining the pool  │"));
+  console.log(paint.bold("  └─────────────────────────────────────────────────────┘\n"));
+  console.log(`  host      ${host.hw.hostname}`);
+  console.log(`  cpu       ${host.hw.cpuModel} (${host.hw.cores} threads, ${host.compute.maxThreads} listed)`);
+  console.log(`  gpu       ${host.hw.gpuName}${host.hw.hasNvidiaSmi ? "  [live telemetry]" : ""}`);
+  console.log(`  ram       ${host.hw.ramGB} GB`);
+  console.log(`  price     ${price} CYCLE / unit-hour`);
+  console.log(`  wallet    ${wallet.address}\n`);
+
+  const startBal: bigint = await c.cycle.balanceOf(wallet.address);
+  host.start().catch((e) => {
+    console.error(paint.red(`provider crashed: ${e?.message ?? e}`));
+    process.exit(1);
+  });
+
+  // earnings ticker
+  while (true) {
+    await sleep(30_000);
+    const bal: bigint = await c.cycle.balanceOf(wallet.address);
+    const delta = bal - startBal;
+    console.log(paint.bold(
+      `  ── session P&L ${delta >= 0n ? "+" : ""}${fmt(delta, 2)} CYCLE · ` +
+      `${host.totalCpuSeconds.toFixed(0)} CPU-seconds sold · ${host.totalGflops.toFixed(0)} GFLOP delivered`
+    ));
+  }
+}
+
+main().catch((err) => { console.error(err); process.exit(1); });
