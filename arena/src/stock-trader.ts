@@ -139,3 +139,72 @@ export async function buyStockToken(
 
 /** Sell the wallet's full balance of one supported stock token back to USDG. */
 export async function sellStockToken(
+  wallet: Wallet,
+  symbol: LiquidStockSymbol,
+  options: Omit<StockBuyOptions, "amountUsdg"> & { stockAmount?: string },
+): Promise<StockSale | null> {
+  if (chain.chainId !== 4663) throw new Error(`stock sells require Robinhood Chain mainnet, got ${chain.chainId}`);
+  if (!/^0x[0-9a-fA-F]{40}$/.test(options.executor)) throw new Error("invalid STOCK_SELL_EXECUTOR_ADDRESS");
+  if (!(options.slippageBps >= 1 && options.slippageBps <= 300)) throw new Error("slippage must be 1-300 bps");
+  if (!(options.maxGasEth > 0 && options.maxGasEth <= 0.001)) throw new Error("invalid gas ceiling");
+
+  return withWalletLane(wallet, async () => {
+    const token = LIQUID_STOCKS[symbol];
+    const stock = new Contract(token, ERC20_ABI, wallet);
+    const usdg = new Contract(USDG, ERC20_ABI, wallet);
+    const executor = new Contract(options.executor, SELL_EXECUTOR_ABI, wallet);
+    const quoter = new Contract(QUOTER, QUOTER_ABI, wallet);
+    const [fullBalance, allowance, beforeUsdg, fees] = await Promise.all([
+      stock.balanceOf(wallet.address),
+      stock.allowance(wallet.address, options.executor),
+      usdg.balanceOf(wallet.address),
+      provider.getFeeData(),
+    ]);
+    const requested = options.stockAmount ? parseUnits(options.stockAmount, 18) : fullBalance;
+    const stockIn = requested < fullBalance ? requested : fullBalance;
+    if (stockIn === 0n) return null;
+
+    const tokenFirst = BigInt(token) < BigInt(USDG);
+    const [quotedOut] = await quoter.quoteExactInputSingle.staticCall({
+      poolKey: {
+        currency0: tokenFirst ? token : USDG,
+        currency1: tokenFirst ? USDG : token,
+        fee: 3000,
+        tickSpacing: 60,
+        hooks: ZERO,
+      },
+      zeroForOne: tokenFirst,
+      exactAmount: stockIn,
+      hookData: "0x",
+    });
+    const minOut = (quotedOut * BigInt(10_000 - options.slippageBps)) / 10_000n;
+    const gasPrice = fees.maxFeePerGas ?? fees.gasPrice;
+    if (!gasPrice) throw new Error("RPC returned no gas price");
+    const conservativeGas = 400_000n + (allowance < stockIn ? 100_000n : 0n);
+    const projectedGas = conservativeGas * gasPrice;
+    const maxGas = parseEther(options.maxGasEth.toFixed(18));
+    if (projectedGas > maxGas) throw new Error(`gas safety stop: projected ${formatEther(projectedGas)} ETH > ${formatEther(maxGas)} ETH`);
+    if (await provider.getBalance(wallet.address) < projectedGas) throw new Error("wallet lacks gas reserve");
+
+    let approvalTx: string | undefined;
+    if (allowance < stockIn) {
+      const tx = await stock.approve(options.executor, stockIn);
+      const receipt = await tx.wait(1);
+      if (!receipt || receipt.status !== 1) throw new Error("stock approval reverted");
+      approvalTx = tx.hash;
+    }
+    const tx = await executor.sellStock(token, stockIn, minOut, Math.floor(Date.now() / 1000) + 180);
+    const receipt = await tx.wait(1);
+    if (!receipt || receipt.status !== 1) throw new Error("stock sale reverted");
+    const received = (await usdg.balanceOf(wallet.address)) - beforeUsdg;
+    if (received < minOut) throw new Error("sale delivered less than minimum output");
+    return {
+      symbol,
+      token,
+      stockSold: formatUnits(stockIn, 18),
+      usdgReceived: formatUnits(received, 6),
+      approvalTx,
+      saleTx: tx.hash,
+    };
+  });
+}
