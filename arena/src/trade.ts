@@ -55,3 +55,59 @@ const explorer = (h: string) => `https://robinhoodchain.blockscout.com/tx/${h}`;
 async function quoteSingle(poolKey: any, zeroForOne: boolean, amountIn: bigint): Promise<bigint> {
   const q = new Contract(V4_QUOTER, QUOTER_ABI, provider);
   const [out] = await q.quoteExactInputSingle.staticCall({ poolKey, zeroForOne, exactAmount: amountIn, hookData: "0x" });
+  return out;
+}
+
+/** One single-hop v4 swap through the UniversalRouter. */
+async function swapSingle(w: Wallet, poolKey: any, zeroForOne: boolean, amountIn: bigint, minOut: bigint, label: string): Promise<string> {
+  const currencyIn = zeroForOne ? poolKey.currency0 : poolKey.currency1;
+  const currencyOut = zeroForOne ? poolKey.currency1 : poolKey.currency0;
+  const actions = "0x070b0e"; // SWAP_EXACT_IN · SETTLE · TAKE
+  const params = [
+    abi.encode([EXACT_IN], [{
+      currencyIn,
+      path: [{
+        intermediateCurrency: currencyOut,
+        fee: poolKey.fee,
+        tickSpacing: poolKey.tickSpacing,
+        hooks: poolKey.hooks,
+        hookData: "0x",
+      }],
+      minHopPriceX36: [],
+      amountIn,
+      amountOutMinimum: minOut,
+    }]),
+    abi.encode(["address", "uint256", "bool"], [currencyIn, amountIn, true]),
+    abi.encode(["address", "address", "uint256"], [currencyOut, w.address, 0]),
+  ];
+  const input = abi.encode(["bytes", "bytes[]"], [actions, params]);
+  const data = UR.encodeFunctionData("execute", ["0x10", [input], Math.floor(Date.now() / 1000) + 300]);
+  const value = currencyIn === ETH ? amountIn : 0n;
+  console.log(`  ${label} …`);
+  const tx = await w.sendTransaction({ to: UNIVERSAL_ROUTER, data, value });
+  const rc = await tx.wait();
+  console.log(`  ${rc?.status === 1 ? "CONFIRMED" : "REVERTED"} · ${explorer(tx.hash)}`);
+  if (rc?.status !== 1) throw new Error("swap reverted");
+  return tx.hash;
+}
+
+/** ERC-20 input needs the Permit2 rails once per token: token->Permit2->Router. */
+async function ensurePermit2(w: Wallet, token: string, need: bigint): Promise<void> {
+  const t = new Contract(token, ERC20_ABI, w);
+  if ((await t.allowance(w.address, PERMIT2)) < need) {
+    console.log("  approving token -> Permit2 …");
+    await (await t.approve(PERMIT2, (1n << 255n))).wait();
+  }
+  const p2 = new Contract(PERMIT2, PERMIT2_ABI, w);
+  const [amt] = await p2.allowance(w.address, token, UNIVERSAL_ROUTER);
+  if (BigInt(amt) < need) {
+    console.log("  approving Permit2 -> UniversalRouter …");
+    await (await p2.approve(token, UNIVERSAL_ROUTER, (1n << 160n) - 1n, 281474976710655n)).wait();
+  }
+}
+
+async function main() {
+  const idx = Math.max(1, Math.min(5, Number(arg("agent", "1")))) - 1;
+  const key = process.env[AGENTS[idx]];
+  if (!key) { console.error(`missing ${AGENTS[idx]} in .env`); process.exit(1); }
+  const w = new Wallet(key, provider);
