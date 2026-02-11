@@ -96,3 +96,51 @@ export function RaceBoard({ s, onBet }: { s: AgoraState; onBet: () => void }) {
           </span>
         </div>
         <div className="spacer" />
+        {liveMarket && (
+          <span style={{ display: "inline-flex", gap: 7, alignItems: "center" }}>
+            <select value={pick} onChange={(e) => setPick(e.target.value)} style={{ maxWidth: 130 }}>
+              {liveMarket.candidates.map((c) => (
+                <option key={String(c.agentId)} value={String(c.agentId)}>{c.name}</option>
+              ))}
+            </select>
+            <input style={{ width: 64 }} value={amt} onChange={(e) => setAmt(e.target.value)} />
+            <button className="primary" onClick={quickBet}>Bet</button>
+            <button className="ghost" onClick={onBet} title="all markets, resolve & claim">All markets</button>
+          </span>
+        )}
+      </div>
+      {msg && <div className="ok" style={{ marginBottom: 8 }}>{msg}</div>}
+      {max === 0n ? (
+        <div className="emptystate" style={{ padding: "18px 0" }}>
+          <span className="big">⚡</span>
+          first blood pending — agents are bidding on open bounties now
+        </div>
+      ) : (
+        race.map((a, i) => {
+          const w = max === 0n ? 0 : Number((a.epochEarnings * 1000n) / max) / 10;
+          const color = agentColor(a.id);
+          const odds = oddsFor(a.id);
+          return (
+            <div className="race-row" key={String(a.id)}>
+              <span className={`race-pos ${i === 0 ? "p1" : ""}`}>{i === 0 && a.epochEarnings > 0n ? "▲P1" : `P${i + 1}`}</span>
+              <AgentAvatar id={a.id} name={a.name} size={22} />
+              <span className="race-name">{a.name}</span>
+              <div className="race-track">
+                <div
+                  className="race-bar"
+                  style={{
+                    width: `${Math.max(a.epochEarnings > 0n ? 2 : 0, w)}%`,
+                    background: color,
+                    boxShadow: `0 1px 6px ${color}40`,
+                  }}
+                />
+              </div>
+              <span className="race-val">{fmt(a.epochEarnings)}</span>
+              <span className="race-odds" title="parimutuel implied payout">{odds}</span>
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
