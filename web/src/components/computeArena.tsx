@@ -674,3 +674,170 @@ export function LiveComputeFeed() {
         {chip("market", mkt?.live ? "LIVE · Robinhood Chain" : "reconnecting…")}
         {(mkt?.stocks ?? []).slice(0, 3).map((st: any) => chip(st.sym, st.usd ? `$${Number(st.usd).toFixed(2)}` : "…"))}
       </div>
+      <div style={{ background: "#101510", borderRadius: 12, padding: "12px 14px", maxHeight: 280, overflowY: "auto", fontFamily: "var(--font-mono)", fontSize: 11.5, lineHeight: 1.75 }}>
+        {lines.map((l: any, i: number) => (
+          <div key={`${l.at}-${i}`} style={{ display: "flex", gap: 8, whiteSpace: "nowrap" }}>
+            <span style={{ color: "#6d7380" }}>{new Date(l.at).toISOString().slice(11, 19)}</span>
+            <span style={{ color: l.color, fontWeight: 600, minWidth: 104, overflow: "hidden", textOverflow: "ellipsis" }}>[{l.name}]</span>
+            <span style={{ color: "#d9e4d9", overflow: "hidden", textOverflow: "ellipsis" }}>{l.text}</span>
+          </div>
+        ))}
+        {lines.length === 0 && <span style={{ color: "#6d7380" }}>lobby open — the feed lights up the second the race starts…</span>}
+      </div>
+      <div className="mut" style={{ fontSize: 11.5, marginTop: 8 }}>
+        Every line is a desk acting on the LIVE market: entries, exits, realized P&L — and every fill batch is anchored
+        on Robinhood Chain. The prices are the real Stock Token markets, tick by tick.
+      </div>
+    </div>
+  );
+}
+
+// ============================================================== ComputeArena
+// The full arena tab: live race + build + on-chain proofs + past winners.
+export function ComputeArena() {
+  const { arena, offline } = useArena();
+  const { wallet } = useWallet();
+  const [, tick] = useState(0);
+  const [betMsg, setBetMsg] = useState<string | null>(null);
+  useEffect(() => { const t = setInterval(() => tick((x) => x + 1), 1000); return () => clearInterval(t); }, []);
+
+  if (offline || !arena) return <div className="card"><h3>Live compute arena <span className="hbar" /></h3><div className="emptystate"><span className="big">⛓</span>the arena is reconnecting — one moment…</div></div>;
+
+  const race = arena.race;
+  const now = Date.now();
+  const ranked = race ? [...race.agents].filter((a: any) => a.funded).sort((a: any, b: any) => b.credits - a.credits) : [];
+  const secsLeft = race ? Math.max(0, Math.floor((race.endsAt - now) / 1000)) : 0;
+  const betsOpen = race ? now < race.sideBetCutoff : false;
+
+  async function backAgent(agentId: string, agentName: string) {
+    if (!wallet) { setBetMsg("connect your wallet (Create-agent card below) to back an agent"); return; }
+    try {
+      setBetMsg(`opening a bet on ${agentName}…`);
+      const res = await fetch(`${RACES_API}/bet`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ agentId, owner: wallet.address }) });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setBetMsg(`approve the ${arena.minSideBetEth} ETH bet in ${wallet.name}…`);
+      const tx = await payEntry(arena.chain, wallet.provider, wallet.address, data.depositAddress, data.minWeiHex);
+      setBetMsg(`bet placed on ${agentName} (${tx.slice(0, 12)}…) — if it finishes #1 you split the side pool`);
+    } catch (e: any) { setBetMsg(String(e?.message ?? e).slice(0, 140)); }
+  }
+
+  const proofs: Array<{ tx: string | null; tag: string; title: string; sub?: string; color: string; bg: string }> = [];
+  (race?.trades ?? []).forEach((f: any) => { if (f.receiptTx || f.proven) proofs.push({ tx: f.receiptTx ?? null, tag: "TRADE", color: "#008a36", bg: "#e4f6e6", title: `${f.name} · ${f.side.toUpperCase()} ${Number(f.qty).toLocaleString(undefined, { maximumFractionDigits: 8 })} ${f.sym} @ ${Number(f.px).toFixed(2)}`, sub: `$${Number(f.usd).toFixed(2)} real notional · confirmed wallet swap` }); });
+  (arena.pastRaces ?? []).forEach((r: any) => {
+    r.results.forEach((res: any) => { if (res.tx) proofs.push({ tx: res.tx, tag: "PAYOUT", color: "#059669", bg: "#e7f7f0", title: `Race #${r.id} · ${fmtEth(res.paidEth)} ETH → ${res.name}`, sub: "real ETH payout on-chain" }); });
+    if (r.anchorTx) proofs.push({ tx: r.anchorTx, tag: "RESULT", color: "#d97706", bg: "#fdf3e3", title: `Race #${r.id} · standings anchored`, sub: "leaderboard on-chain" });
+  });
+  const shownProofs = proofs.slice(0, 12);
+
+  return (
+    <>
+      <VisualRace arena={arena} myAddress={wallet?.address} />
+      <RealTradesFeed />
+      <HouseWallets />
+      <div className="card">
+        <h3>The trading floor — real stocks · live prices · on-chain receipts<span className="hbar" />
+          <span className="mono" style={{ letterSpacing: 0, color: "var(--muted)" }}>{race && <>race #{race.id} · {Math.floor(secsLeft / 60)}:{String(secsLeft % 60).padStart(2, "0")} · pot {fmtEth(race.potEth)} <EthMark size={10} /> · side {fmtEth(race.sidePotEth)} <EthMark size={10} /></>}</span>
+        </h3>
+        {/* THE TAPE — every fill, live, with its on-chain anchor */}
+        <div style={{ marginBottom: 12, overflowX: "auto" }}>
+          <table>
+            <thead><tr><th>Time</th><th>Agent</th><th>Side</th><th className="num">Qty</th><th>Stock</th><th className="num">Price</th><th className="num">Notional</th><th>Receipt</th></tr></thead>
+            <tbody>
+              {(race?.trades ?? []).slice(0, 8).map((f: any, i: number) => (
+                <tr key={`${f.t}-${i}`}>
+                  <td className="mut" style={{ fontSize: 11 }}>{new Date(f.t).toISOString().slice(11, 19)}</td>
+                  <td><span className="dot" style={{ background: STRAT_COLOR[f.strategy] ?? "#2a78d6" }} /><span className="ink">{f.name}</span></td>
+                  <td style={{ color: f.side === "buy" ? "var(--good)" : "var(--critical)", fontWeight: 700, fontSize: 11.5 }}>{f.side.toUpperCase()}</td>
+                  <td className="num">{Number(f.qty).toLocaleString(undefined, { maximumFractionDigits: 8 })}</td>
+                  <td className="ink" style={{ fontWeight: 600 }}>{f.sym}</td>
+                  <td className="num">${Number(f.px).toFixed(2)}</td>
+                  <td className="num mut">${Number(f.usd).toFixed(2)}</td>
+                  <td>{f.receiptTx ? <a href={explorerTxUrl(arena, f.receiptTx)} target="_blank" rel="noreferrer" style={{ color: "var(--violet)", fontFamily: "var(--font-mono)", fontSize: 10.5, fontWeight: 600 }}>on-chain ↗</a> : f.proven ? <span style={{ color: "var(--violet)", fontSize: 10.5 }} title="anchored — link public at launch">✓🔒</span> : <span className="mut" style={{ fontSize: 10.5 }}>queued…</span>}</td>
+                </tr>
+              ))}
+              {(race?.trades ?? []).length === 0 && <tr><td colSpan={8} className="mut" style={{ padding: 12 }}>the tape starts printing the moment the race opens…</td></tr>}
+            </tbody>
+          </table>
+          <div className="mut" style={{ fontSize: 11, marginTop: 6 }}>
+            <b className="ink">Why this is verifiable:</b> every row is a successful wallet swap of a real Robinhood Stock Token.
+            Open the transaction to verify the USDG movement, token transfer, and receiving agent address.
+          </div>
+        </div>
+        <table>
+          <thead><tr><th>#</th><th>Agent</th><th>Desk</th><th className="num">P&L</th><th className="num">W/L</th><th className="num">Equity</th><th className="num">Back</th></tr></thead>
+          <tbody>
+            {ranked.map((a: any, i: number) => (
+              <tr key={a.id} style={wallet && a.owner === wallet.address ? { background: "var(--violet-soft)" } : undefined}>
+                <td className="mut">{i + 1}</td>
+                <td><a href={`/agent/${a.id}`} style={{ textDecoration: "none" }} title="open this desk's dashboard — trades, P&L, tx ids"><span className="dot" style={{ background: STRAT_COLOR[a.strategy] ?? "#2a78d6" }} /><span className="ink" style={{ borderBottom: "1px dashed var(--border-strong)" }}>{a.name}</span></a>{a.house ? <span className="mut" style={{ fontSize: 10 }}> · house</span> : <span style={{ color: "var(--violet)", fontSize: 10 }}> · staked {fmtEth(a.entryEth)} <EthMark size={8} /></span>}{a.wallet && <> · <a href={explorerAddressUrl(arena, a.wallet)} target="_blank" rel="noreferrer" title={`${a.name}'s wallet on Blockscout`} style={{ color: "var(--violet)", fontFamily: "var(--font-mono)", fontSize: 10, textDecoration: "none" }}>{a.wallet.slice(0, 6)}..{a.wallet.slice(-4)} ↗</a></>}{a.sideBetEth > 0 && <span style={{ color: "var(--warning)", fontSize: 10 }}> · backed {fmtEth(a.sideBetEth)} <EthMark size={8} /></span>}</td>
+                <td className="mut" style={{ fontSize: 11 }}>{a.desk ?? arena.strategies?.[a.strategy]?.name}</td>
+                <td className="num" style={{ color: a.credits >= 0 ? "var(--good)" : "var(--critical)" }}>{fmtPnl(a.credits)}</td>
+                <td className="num"><span className="wl-w">{a.jobsVerified}W</span> <span className="wl-l">{a.jobsRejected}L</span></td>
+                <td className="num">${(a.equityUsd ?? 0).toFixed(2)}</td>
+                <td className="num">{betsOpen ? <button className="ghost" style={{ padding: "3px 10px", fontSize: 11 }} onClick={() => backAgent(a.id, a.name)}>{arena.minSideBetEth} <EthMark size={9} /></button> : <span className="mut" style={{ fontSize: 10 }}>closed</span>}</td>
+              </tr>
+            ))}
+            {ranked.length === 0 && <tr><td colSpan={7} className="mut" style={{ padding: 14 }}>agents funding up…</td></tr>}
+          </tbody>
+        </table>
+        {betMsg && <div className="ok" style={{ marginTop: 8 }}>{betMsg}</div>}
+        <div className="mut" style={{ fontSize: 11.5, marginTop: 10 }}>Score = change in real wallet equity (USDG + Stock Tokens) since the race opened. <b className="ink">Back</b> any agent with ETH: backers of the round's #1 split the side pool (5% rake).</div>
+      </div>
+
+      <CompareCharts />
+
+      <LiveComputeFeed />
+
+      <BuildAgentForm />
+
+      <div className="card">
+        <h3>On-chain receipts — click any to verify on Blockscout <span className="hbar" /><span className="livedot" /></h3>
+        {arena.receiptsPaused && <div className="err" style={{ marginBottom: 10 }}>⚠ proofs paused — fund the treasury {arena.treasury?.slice(0, 12)}… with ETH for gas</div>}
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          {shownProofs.map((p, i) => {
+            const inner = (
+              <>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9.5, fontWeight: 600, color: p.color, background: p.bg, borderRadius: 6, padding: "4px 0", textAlign: "center" }}>{p.tag}</span>
+                <span style={{ minWidth: 0 }}><span className="ink" style={{ fontSize: 13, fontWeight: 600 }}>{p.title}</span>{p.sub && <span className="mut" style={{ display: "block", fontSize: 10.5, fontFamily: "var(--font-mono)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.sub}</span>}</span>
+                {p.tx
+                  ? <span style={{ fontFamily: "var(--font-mono)", fontSize: 11.5, color: "var(--violet)", fontWeight: 600, whiteSpace: "nowrap" }}>{p.tx.slice(0, 7)}…{p.tx.slice(-5)} ↗</span>
+                  : <span className="mut" style={{ fontFamily: "var(--font-mono)", fontSize: 10.5, whiteSpace: "nowrap" }} title="tx links reveal the wallets — public at launch">on-chain ✓ · 🔒 link at launch</span>}
+              </>
+            );
+            const rowStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "84px 1fr auto", gap: 12, alignItems: "center", padding: "10px 6px", textDecoration: "none", color: "inherit", borderBottom: i < shownProofs.length - 1 ? "1px solid var(--grid)" : "none" };
+            return p.tx
+              ? <a key={`${p.tag}${i}`} href={explorerTxUrl(arena, p.tx)} target="_blank" rel="noreferrer" style={rowStyle}>{inner}</a>
+              : <div key={`${p.tag}${i}`} style={rowStyle}>{inner}</div>;
+          })}
+          {shownProofs.length === 0 && <div className="emptystate">waiting for the next fill batch to anchor on-chain…</div>}
+        </div>
+      </div>
+
+      {arena.pastRaces && arena.pastRaces.length > 0 && (
+        <div className="card">
+          <h3>Past winners <span className="hbar" /></h3>
+          <table>
+            <thead><tr><th>Race</th><th>Winner</th><th className="num">Net cr</th><th className="num">Pot paid</th><th>Proof</th></tr></thead>
+            <tbody>
+              {arena.pastRaces.map((r: any) => { const w = potChampion(r); const top = (r.results ?? [])[0]; return (
+                <tr key={r.id}><td className="mut">#{r.id}</td><td className="ink">{w ? `🥇 ${w.name}` : <span className="mut">no pot winner{top ? ` · top: ${top.name}` : ""}</span>}</td><td className="num">{(w ?? top) ? (w ?? top).credits.toFixed(0) : "—"}</td><td className="num" style={{ color: "var(--good)" }}>{w && w.paidEth > 0 ? <>{fmtEth(w.paidEth)} <EthMark size={10} /></> : "—"}</td><td>{r.anchorTx ? <a href={explorerTxUrl(arena, r.anchorTx)} target="_blank" rel="noreferrer" style={{ color: "var(--violet)", fontFamily: "var(--font-mono)", fontSize: 11.5 }}>on-chain ↗</a> : <span className="mut">—</span>}</td></tr>
+              ); })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ============================================================== MyComputeTab
+// The "My Agents" tab: your agents + the SAME create-agent flow.
+export function MyComputeTab() {
+  return (
+    <>
+      <MyComputeRoster />
+      <BuildAgentForm />
+    </>
+  );
+}
