@@ -819,3 +819,208 @@
         "internalType": "string",
         "name": "region",
         "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "gpuModel",
+        "type": "string"
+      },
+      {
+        "internalType": "uint32",
+        "name": "units",
+        "type": "uint32"
+      },
+      {
+        "internalType": "uint256",
+        "name": "pricePerUnitHour",
+        "type": "uint256"
+      }
+    ],
+    "name": "registerProvider",
+    "outputs": [
+      {
+        "internalType": "uint64",
+        "name": "providerId",
+        "type": "uint64"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "registry",
+    "outputs": [
+      {
+        "internalType": "contract IAgentRegistryMin",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "renounceOwnership",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint64",
+        "name": "providerId",
+        "type": "uint64"
+      },
+      {
+        "internalType": "uint32",
+        "name": "units",
+        "type": "uint32"
+      },
+      {
+        "internalType": "uint32",
+        "name": "durationSecs",
+        "type": "uint32"
+      }
+    ],
+    "name": "rent",
+    "outputs": [
+      {
+        "internalType": "uint64",
+        "name": "rentalId",
+        "type": "uint64"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "rentalCount",
+    "outputs": [
+      {
+        "internalType": "uint64",
+        "name": "",
+        "type": "uint64"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint64",
+        "name": "rentalId",
+        "type": "uint64"
+      }
+    ],
+    "name": "reportRentalFailure",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_minProviderStake",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint16",
+        "name": "_feeBps",
+        "type": "uint16"
+      },
+      {
+        "internalType": "uint32",
+        "name": "_confirmWindow",
+        "type": "uint32"
+      }
+    ],
+    "name": "setParams",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalComputeVolume",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalFeesRouted",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalUnitSeconds",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "newOwner",
+        "type": "address"
+      }
+    ],
+    "name": "transferOwnership",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "vault",
+    "outputs": [
+      {
+        "internalType": "contract IStakingVaultMin",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint64",
+        "name": "providerId",
+        "type": "uint64"
+      }
+    ],
+    "name": "withdrawProviderStake",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+]
