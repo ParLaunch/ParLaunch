@@ -83,3 +83,88 @@ body.ld-light ::selection { background: #d6f5d9; color: #121a12; }
 
 /* ------------------------------------------------------------- hero */
 .ld-hero { position: relative; padding: 88px 0 64px; overflow: visible; }
+.ld-hero::before {
+  content: ""; position: absolute; inset: -120px -300px 0;
+  background:
+    radial-gradient(560px 340px at 18% 8%, rgba(0, 200, 5, 0.12), transparent 65%),
+    radial-gradient(520px 320px at 78% 2%, rgba(16, 185, 129, 0.1), transparent 60%),
+    radial-gradient(420px 280px at 55% 30%, rgba(245, 158, 11, 0.08), transparent 60%);
+  pointer-events: none; z-index: -1;
+}
+.ld-hero-grid { display: grid; grid-template-columns: 1.04fr 0.96fr; gap: 54px; align-items: center; }
+
+.ld-badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em;
+  color: var(--emerald); text-transform: uppercase;
+  border: 1px solid rgba(5, 150, 105, 0.35); background: var(--emerald-soft);
+  padding: 6px 13px; border-radius: 999px; margin-bottom: 26px;
+}
+.ld-pulse {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--emerald);
+  animation: ld-pulse 2s ease-in-out infinite;
+}
+@keyframes ld-pulse { 50% { opacity: 0.35; } }
+
+.ld-h1 {
+  font-family: var(--font-display); font-weight: 700;
+  font-size: clamp(42px, 5.6vw, 68px); line-height: 1.02;
+  letter-spacing: -0.028em; color: var(--ink); margin: 0 0 24px;
+}
+.ld-h1 .serif { font-family: var(--font-serif); font-style: italic; font-weight: 400; color: var(--violet); letter-spacing: -0.01em; }
+.ld-lede { font-size: 17px; line-height: 1.65; color: var(--sub); max-width: 52ch; margin: 0 0 34px; }
+.ld-lede b { color: var(--ink); font-weight: 600; }
+.ld-hero-actions { display: flex; gap: 14px; align-items: center; }
+.ld-hero-note { margin-top: 20px; font-size: 12.5px; color: var(--faint); font-family: var(--font-mono); }
+.ld-hero-note b { color: var(--ink); font-weight: 600; }
+
+/* terminal window (stays dark: the machine lives in there) */
+.ld-term {
+  background: #101018; border-radius: 18px; overflow: hidden;
+  box-shadow: 0 40px 90px rgba(22, 21, 29, 0.28), 0 4px 18px rgba(22, 21, 29, 0.12);
+  border: 1px solid rgba(22, 21, 29, 0.9);
+}
+.ld-term-bar {
+  display: flex; align-items: center; gap: 7px;
+  padding: 12px 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.ld-term-bar i { width: 10px; height: 10px; border-radius: 50%; display: block; }
+.ld-term-title { margin-left: 8px; font-family: var(--font-mono); font-size: 11px; color: #6d7380; }
+.ld-term-body {
+  padding: 16px 18px 20px; height: 330px; overflow: hidden;
+  font-family: var(--font-mono); font-size: 11.8px; line-height: 1.9;
+  display: flex; flex-direction: column; justify-content: flex-end;
+}
+.ld-term-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; animation: ld-rise 300ms ease; color: #b7bcc7; }
+@keyframes ld-rise { from { opacity: 0; transform: translateY(6px); } }
+.ld-term-line .tag { display: inline-block; min-width: 116px; }
+.ld-cursor { display: inline-block; width: 8px; height: 14px; background: #00c805; vertical-align: text-bottom; animation: ld-blink 1s steps(1) infinite; }
+@keyframes ld-blink { 50% { opacity: 0; } }
+
+/* ------------------------------------------------------- ticker band */
+.ld-ticker {
+  margin-top: 70px; background: var(--ink); border-radius: 16px;
+  overflow: hidden; padding: 13px 0; position: relative;
+}
+.ld-ticker::before, .ld-ticker::after {
+  content: ""; position: absolute; top: 0; bottom: 0; width: 70px; z-index: 2;
+}
+.ld-ticker::before { left: 0; background: linear-gradient(90deg, var(--ink), transparent); }
+.ld-ticker::after { right: 0; background: linear-gradient(-90deg, var(--ink), transparent); }
+.ld-ticker-track {
+  display: flex; gap: 44px; width: max-content;
+  animation: ld-scroll 46s linear infinite;
+}
+.ld-ticker:hover .ld-ticker-track { animation-play-state: paused; }
+@keyframes ld-scroll { to { transform: translateX(-50%); } }
+.ld-tick-item {
+  display: inline-flex; align-items: center; gap: 9px; white-space: nowrap;
+  font-family: var(--font-mono); font-size: 12px; color: #b7bcc7;
+}
+.ld-tick-item i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex: none; }
+
+/* ------------------------------------------------------ big numbers */
+.ld-numbers { display: grid; grid-template-columns: repeat(4, 1fr); gap: 34px; padding: 64px 0 8px; }
+.ld-number { border-top: 2px solid var(--ink); padding-top: 16px; }
+.ld-number .k { font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.ld-number .v { font-family: var(--font-mono); font-size: 38px; font-weight: 600; color: var(--ink); line-height: 1; }
