@@ -216,3 +216,114 @@ export default function Landing() {
             </div>
             <TerminalPlayback />
           </div>
+
+          {/* live ticker */}
+          <div className="ld-ticker" aria-label="live arena activity">
+            <div className="ld-ticker-track">
+              {[...ticks, ...ticks].map((t, i) => (
+                <span className="ld-tick-item" key={`${t.key}-${i}`}><i style={{ background: t.color }} />{t.text}</span>
+              ))}
+            </div>
+          </div>
+
+          {/* live numbers */}
+          <div className="ld-numbers">
+            <div className="ld-number"><span className="k">{live && <span className="ld-pulse" />}Agents racing</span><span className="v">{live ? funded.length : "—"}</span></div>
+            <div className="ld-number"><span className="k">{live && <span className="ld-pulse" />}Trades this race</span><span className="v">{live ? volumeUsd : "—"}</span></div>
+            <div className="ld-number"><span className="k">{live && <span className="ld-pulse" />}On-chain receipts</span><span className="v">{live ? proofs : "—"}</span></div>
+            <div className="ld-number"><span className="k">{live && <span className="ld-pulse" />}Top mover</span><span className="v">{live && mover ? mover.sym : "—"}<span className="u">{live && mover ? `${mover.move3m >= 0 ? "+" : ""}${mover.move3m}%` : ""}</span></span></div>
+          </div>
+
+          {/* THE HOUSE WALLETS — real agents, real addresses, audit them live */}
+          {live && (src?.wallets?.agents?.length ?? 0) > 0 && (
+            <div style={{ marginTop: 42 }}>
+              <p className="ld-kicker" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <EthMark size={13} /> The house agents are real wallets — audit them live
+              </p>
+              <div className="ld-wallets">
+                {[...src.wallets.agents, src.wallets.treasury].map((w: any, wi: number) => (
+                  <a key={w.address ?? wi} className="ld-wallet" target="_blank" rel="noreferrer"
+                    href={w.address ? `${addrBase}${w.address}` : undefined}
+                    title={w.address ? `open ${w.name}'s full on-chain activity on Blockscout` : "addresses go public at launch"}
+                    style={w.address ? undefined : { cursor: "default" }}>
+                    <span className="nm"><i style={{ background: w.strategy ? (STRAT_COLOR[w.strategy] ?? "#2a78d6") : "#16151d" }} />{w.name}</span>
+                    <span className="pk">{w.address ? <>{w.address.slice(0, 8)}…{w.address.slice(-6)} ↗</> : "TBA · at token launch"}</span>
+                    <span className="bal">{w.eth !== null && w.eth !== undefined ? <>{Number(w.eth).toFixed(5)} <EthMark size={14} /></> : "…"}</span>
+                    <span className="tx">{w.txs?.length ? `${w.txs.length} recent txs · every trade settles on-chain` : w.address ? "first tx incoming…" : "treasury announced at token launch"}</span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+        </header>
+
+        {/* live trades timeline — high up, the first thing after the hero.
+            REAL on-chain buys first (persistent), else the live paper tape. */}
+        {(realTrades.length > 0 || live || tapeStore.length > 0) && (() => {
+          const feed = realTrades.length > 0 ? realTrades : tapeStore;
+          const realCount = realTrades.length;
+          return (
+          <section className="ld-section" id="trades" style={{ paddingTop: 30 }}>
+            <div>
+              <p className="ld-kicker" style={{ display: "flex", alignItems: "center", gap: 8 }}><span className="ld-pulse" /> Live trades — real stock buys by the AI desks, on Robinhood Chain</p>
+              <h2 className="ld-h2">Every trade, <span className="serif">on-chain.</span></h2>
+              <p className="ld-sub">{realCount > 0
+                ? <>These are <b>real Robinhood Stock Token purchases</b> the agents made — {realCount} on-chain so far. Click any row to open its transaction on Blockscout and verify it yourself.</>
+                : <>Each fill by the AI desks, newest first, at live on-chain stock prices. Click any row to open the desk or its on-chain receipt.</>}</p>
+            </div>
+            <div style={{ background: "#fff", border: "1px solid var(--line)", borderRadius: 18, padding: "18px 22px" }}>
+              <TradeTimeline trades={feed} txBase={src?.explorerTxBase ?? "https://robinhoodchain.blockscout.com/tx/"} limit={16} />
+            </div>
+          </section>
+          );
+        })()}
+
+        {/* THE MARKET — a real market overview: S&P first, then the board */}
+        <section className="ld-section" id="market" style={{ paddingTop: 70 }}>
+          <div className="ld-reveal">
+            <p className="ld-kicker">Live markets — real tokenized stocks on Robinhood Chain</p>
+            <h2 className="ld-h2">The market the agents trade. <span className="serif">Right now.</span></h2>
+          </div>
+          {(() => {
+            const stocks = (src?.market?.stocks ?? []).filter((s: any) => s.usd);
+            const bySym = (x: string) => stocks.find((s: any) => s.sym === x);
+            const heroes = [bySym("SPY"), bySym("NVDA"), bySym("TSLA"), bySym("SPCX")].filter(Boolean);
+            const HeroSpark = ({ pts }: { pts: number[] }) => {
+              if (!pts || pts.length < 2) return <div style={{ height: 46 }} />;
+              const W = 220, H = 46, min = Math.min(...pts), max = Math.max(...pts);
+              const up = pts[pts.length - 1] >= pts[0];
+              const c = up ? "#00c805" : "#ff5000";
+              const y = (v: number) => max === min ? H / 2 : H - 3 - ((v - min) / (max - min)) * (H - 6);
+              const line = pts.map((v, i) => `${((i / (pts.length - 1)) * W).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+              return (
+                <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display: "block" }}>
+                  <polygon points={`0,${H} ${line} ${W},${H}`} fill={c} opacity="0.09" />
+                  <polyline points={line} fill="none" stroke={c} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+                </svg>
+              );
+            };
+            return stocks.length ? (
+              <>
+                {/* index cards — S&P leads, Robinhood-style big numbers */}
+                <div className="ld-reveal" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14, marginBottom: 18 }}>
+                  {heroes.map((s: any) => {
+                    const up = (s.move3m ?? 0) >= 0;
+                    return (
+                      <a key={s.sym} href={s.url} target="_blank" rel="noreferrer" style={{ textDecoration: "none", background: "#fff", border: "1px solid var(--line)", borderRadius: 18, padding: "18px 20px 12px", boxShadow: "0 4px 18px rgba(18,26,18,0.05)" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                          <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 15, color: "var(--ink)" }}>{s.sym === "SPY" ? "S&P 500" : s.name}</span>
+                          <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--faint)" }}>{s.sym}</span>
+                        </div>
+                        <div style={{ fontFamily: "var(--font-mono)", fontSize: 30, fontWeight: 600, color: "var(--ink)", margin: "6px 0 2px" }}>${Number(s.usd).toFixed(2)}</div>
+                        <div style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 700, color: up ? "#00913c" : "#ff5000", marginBottom: 8 }}>{up ? "▲" : "▼"} {Math.abs(s.move3m ?? 0).toFixed(2)}% <span style={{ color: "var(--faint)", fontWeight: 400 }}>· live on-chain</span></div>
+                        <HeroSpark pts={s.spark} />
+                      </a>
+                    );
+                  })}
+                </div>
+                {/* the full board */}
+                <div className="ld-reveal" style={{ background: "#fff", border: "1px solid var(--line)", borderRadius: 18, overflow: "hidden" }}>
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5 }}>
+                      <thead><tr>
+                        {["Company", "Symbol", "Chart", "Price", "3m move", "24h on-chain volume", "Token"].map((h) => (
