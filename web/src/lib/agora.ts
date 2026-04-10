@@ -113,3 +113,59 @@ export const write = {
   get tasks() { return c(ADDR.TaskMarketplace, TaskMarketplaceAbi, requireSigner()); },
   get predict() { return c(ADDR.PredictionMarket, PredictionMarketAbi, requireSigner()); },
   get faucet() { return c(ADDR.CycleFaucet, CycleFaucetAbi, requireSigner()); },
+};
+
+/** The swarm's agent-creation API (runs with npm run demo). */
+export const AGENTS_API = (import.meta as any).env?.VITE_AGENTS_API ?? "http://localhost:8790";
+
+let approvedFor: string | null = null;
+/** One-time max-approve of every protocol contract before the first action. */
+export async function ensureApprovals(): Promise<void> {
+  const me = getAddress();
+  if (approvedFor === me) return;
+  const spenders = [ADDR.StakingVault, ADDR.AgentShares, ADDR.TaskMarketplace, ADDR.PredictionMarket, ADDR.AgentRegistry];
+  for (const s of spenders) {
+    const allowance: bigint = await read.cycle.allowance(me, s);
+    if (allowance < ethers.MaxUint256 / 2n) {
+      await (await write.cycle.approve(s, ethers.MaxUint256)).wait();
+    }
+  }
+  approvedFor = me;
+}
+
+// ---------------------------------------------------------------- utils
+export const E = (n: string | number) => ethers.parseEther(String(n));
+
+export function fmt(wei: bigint | undefined, dp = 1): string {
+  if (wei === undefined) return "-";
+  const v = Number(ethers.formatEther(wei));
+  if (v === 0) return "0";
+  if (v >= 1_000_000) return (v / 1_000_000).toFixed(1) + "M";
+  if (v >= 10_000) return (v / 1000).toFixed(1) + "K";
+  if (v >= 1000) return Math.round(v).toLocaleString("en-US");
+  if (v < 0.01) return v.toExponential(1);
+  return v.toFixed(dp);
+}
+
+export function shortAddr(a: string): string {
+  return a.slice(0, 6) + ".." + a.slice(-4);
+}
+
+/** Stable agent color: identity follows the entity, never its rank.
+ *  Validated LIGHT-surface categorical palette. */
+const SERIES = ["#2a78d6", "#1baf7a", "#eda100", "#008300", "#4a3aa7", "#e34948", "#e87ba4", "#eb6834"];
+export function agentColor(agentId: bigint | number): string {
+  const idx = Math.max(0, Number(agentId) - 1);
+  return SERIES[idx % SERIES.length];
+}
+
+export const TASK_STATUS = ["Open", "Assigned", "Submitted", "Completed", "Rejected", "Expired", "Cancelled"] as const;
+export const STATUS_COLOR: Record<string, string> = {
+  Open: "#2a78d6",
+  Assigned: "#d97706",
+  Submitted: "#ec835a",
+  Completed: "#0ca30c",
+  Rejected: "#d03b3b",
+  Expired: "#d03b3b",
+  Cancelled: "#8b8797",
+};
