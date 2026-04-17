@@ -128,3 +128,68 @@ async function fetchSnapshot(prev: AgoraState, lastBlockRef: { v: number }, even
       };
     })
   );
+
+  // ---- money stats
+  const [vaultFees, totalStaked, taskVolume, computeVolume, computeIndex, myBal, myStaked, myPending, myClaimedFaucet] = await Promise.all([
+    read.vault.totalFeesReceived(),
+    read.vault.totalStaked(),
+    read.tasks.totalVolume(),
+    read.compute.totalComputeVolume(),
+    read.compute.computeIndex(),
+    read.cycle.balanceOf(me),
+    read.vault.stakedOf(me),
+    read.vault.pendingRewards(me),
+    read.faucet.claimed(me),
+  ]);
+  const [b1, b2, b3, b4, b5] = await Promise.all([
+    read.cycle.balanceOf(ADDR.TaskMarketplace),
+    read.cycle.balanceOf(ADDR.PredictionMarket),
+    read.cycle.balanceOf(ADDR.ComputeMarket),
+    read.cycle.balanceOf(ADDR.AgentRegistry),
+    read.cycle.balanceOf(ADDR.StakingVault),
+  ]);
+
+  const totalUnits = providers.reduce((s, p) => s + p.totalUnits, 0);
+  const busyUnits = providers.reduce((s, p) => s + (p.totalUnits - p.availableUnits), 0);
+
+  // ---- incremental event feed
+  const newEvents = await pullEvents(lastBlockRef.v + 1, block, nameOf);
+  lastBlockRef.v = block;
+  const mergedEvents = [...newEvents, ...events].slice(0, 60);
+
+  const now = Date.now();
+  const feesHistory = [...prev.feesHistory, { t: now, v: Number(ethers.formatEther(vaultFees)) }].slice(-150);
+  const volumeHistory = [...prev.volumeHistory, { t: now, v: Number(ethers.formatEther(taskVolume)) }].slice(-150);
+
+  return {
+    ready: true, error: null, block,
+    epoch: { number: epochNum, endsAt: epochEndsAt, duration: ADDR.epochDuration },
+    me: { address: me, balance: myBal, staked: myStaked, pending: myPending, claimedFaucet: myClaimedFaucet },
+    stats: {
+      activeAgents: agents.filter((a) => a.active).length, totalAgents: agents.length,
+      openTasks: openIds.length, taskVolume, computeVolume, vaultFees, totalStaked,
+      tvl: b1 + b2 + b3 + b4 + b5,
+      utilization: totalUnits === 0 ? 0 : busyUnits / totalUnits,
+      computeIndex,
+    },
+    agents, tasks, providers, markets, feesHistory, volumeHistory, events: mergedEvents,
+  };
+}
+
+async function pullEvents(fromBlock: number, toBlock: number, nameOf: (id: bigint) => string): Promise<FeedItem[]> {
+  if (toBlock < fromBlock) return [];
+  if (toBlock - fromBlock > 1500) fromBlock = toBlock - 1500; // first load: recent history only
+  const out: FeedItem[] = [];
+  const push = (log: any, text: string, kind: string) =>
+    out.push({ key: `${log.blockNumber}-${log.index}`, block: log.blockNumber, text, kind });
+
+  const [posted, assigned, completed, rejected, registered, liquidated, trades, mkCreated, mkResolved, bets, rentals] =
+    await Promise.all([
+      read.tasks.queryFilter(read.tasks.filters.TaskPosted(), fromBlock, toBlock),
+      read.tasks.queryFilter(read.tasks.filters.TaskAssigned(), fromBlock, toBlock),
+      read.tasks.queryFilter(read.tasks.filters.TaskCompleted(), fromBlock, toBlock),
+      read.tasks.queryFilter(read.tasks.filters.TaskRejected(), fromBlock, toBlock),
+      read.registry.queryFilter(read.registry.filters.AgentRegistered(), fromBlock, toBlock),
+      read.registry.queryFilter(read.registry.filters.AgentLiquidated(), fromBlock, toBlock),
+      read.shares.queryFilter(read.shares.filters.Trade(), fromBlock, toBlock),
+      read.predict.queryFilter(read.predict.filters.MarketCreated(), fromBlock, toBlock),
