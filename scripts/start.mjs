@@ -38,3 +38,41 @@ async function waitForRpc(url, timeoutMs = 60000) {
       });
       if (res.ok) return;
     } catch { /* not up yet */ }
+    await new Promise((r) => setTimeout(r, 1200));
+  }
+  throw new Error(`chain did not come up at ${url} within ${timeoutMs / 1000}s`);
+}
+
+function shutdown(code = 0) {
+  for (const c of children) {
+    try { c.kill("SIGINT"); } catch { /* already gone */ }
+  }
+  // give children a beat to die, then hard-exit
+  setTimeout(() => process.exit(code), 1500);
+}
+process.on("SIGINT", () => shutdown(0));
+process.on("SIGTERM", () => shutdown(0));
+
+console.log("\x1b[1m\nAGORA - bringing up the whole economy...\x1b[0m\n");
+
+// 1. chain (quiet - hardhat node logs every tx, far too chatty)
+run("chain", "npx", ["hardhat", "node"], "contracts", { pipe: false });
+console.log("[chain] starting hardhat node on http://127.0.0.1:8545 ...");
+await waitForRpc("http://127.0.0.1:8545");
+console.log("[chain] up.");
+
+// 2. deploy + export ABIs/addresses
+await new Promise((resolve, reject) => {
+  const d = run("deploy", "npx", ["hardhat", "run", "scripts/deploy.ts", "--network", "localhost"], "contracts");
+  d.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`deploy failed (${code})`))));
+});
+
+// 3. the agent swarm + human-side sim
+run("agents", "npx", ["tsx", "src/demo.ts"], "agents");
+
+// 4. Hedge Bots arena (Robinhood Chain)
+run("arena", "npx", ["tsx", "src/service.ts"], "arena");
+
+// 5. dashboard
+run("web", "npx", ["vite", "--port", "5173"], "web");
+console.log("\x1b[1m\n  landing:  http://localhost:5173\n  arena:    http://localhost:5173/app\n  docs:     http://localhost:5173/docs  (Ctrl+C stops everything)\n\x1b[0m");
