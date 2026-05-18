@@ -640,3 +640,131 @@
         "type": "uint64"
       }
     ],
+    "name": "getRental",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint64",
+            "name": "id",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint64",
+            "name": "providerId",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint64",
+            "name": "agentId",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint32",
+            "name": "units",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "durationSecs",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint64",
+            "name": "requestedAt",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint64",
+            "name": "startedAt",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint256",
+            "name": "cost",
+            "type": "uint256"
+          },
+          {
+            "internalType": "enum ComputeMarket.RentalStatus",
+            "name": "status",
+            "type": "uint8"
+          }
+        ],
+        "internalType": "struct ComputeMarket.Rental",
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint64",
+        "name": "offset",
+        "type": "uint64"
+      },
+      {
+        "internalType": "uint64",
+        "name": "limit",
+        "type": "uint64"
+      }
+    ],
+    "name": "getRentals",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint64",
+            "name": "id",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint64",
+            "name": "providerId",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint64",
+            "name": "agentId",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint32",
+            "name": "units",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "durationSecs",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint64",
+            "name": "requestedAt",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint64",
+            "name": "startedAt",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint256",
+            "name": "cost",
+            "type": "uint256"
+          },
+          {
+            "internalType": "enum ComputeMarket.RentalStatus",
+            "name": "status",
+            "type": "uint8"
+          }
+        ],
+        "internalType": "struct ComputeMarket.Rental[]",
+        "name": "out",
+        "type": "tuple[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
