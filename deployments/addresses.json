@@ -6,3 +6,5 @@
   "epochGenesis": 1783278901,
   "epochDuration": 300,
   "minAgentStake": "100000000000000000000",
+  "minProviderStake": "500000000000000000000",
+  "deployedAt": "2026-07-05T19:15:01.695Z",
